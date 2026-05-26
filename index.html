@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>跨境电商四语标题翻译工具</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  textarea, input { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .lang-card { transition: all 0.2s; }
+  .char-ok { color: #059669; }
+  .char-warn { color: #d97706; }
+  .char-over { color: #dc2626; font-weight: 600; }
+  details > summary { cursor: pointer; user-select: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  .spinner { border: 2px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.8s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+<div class="max-w-[1400px] mx-auto flex gap-5 p-4 lg:p-6 lg:pl-[8%] xl:pl-[10%]">
+  <div class="flex-1 min-w-0">
+  <header class="mb-6 flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">跨境电商四语标题翻译</h1>
+      <p class="text-sm text-slate-500 mt-1">中/英 → 英语 · 西班牙语(MX/CL/CO) · 葡萄牙语(BR) · 中文，SEO 优化版</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <select id="profileQuickSwitch" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100 cursor-pointer max-w-[200px]" title="快速切换 API 配置"></select>
+      <button id="btnHistory" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">📜 历史</button>
+      <button id="btnSettings" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">⚙️ 设置</button>
+    </div>
+  </header>
+
+  <!-- 设置面板 -->
+  <section id="settingsPanel" class="hidden bg-white border border-slate-200 rounded-xl p-5 mb-5 shadow-sm">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold text-slate-900">API 配置（OpenAI 兼容协议）</h2>
+      <p class="text-xs text-slate-400">支持保存多套配置，快速切换</p>
+    </div>
+
+    <!-- 配置选择器 -->
+    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-4">
+      <label class="block text-xs text-slate-500 mb-1.5">当前配置</label>
+      <div class="flex gap-2 flex-wrap">
+        <select id="profileSelect" class="flex-1 min-w-[200px] px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></select>
+        <button id="btnNewProfile" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="新建配置">➕ 新建</button>
+        <button id="btnRenameProfile" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="重命名">✏️ 改名</button>
+        <button id="btnDuplicateProfile" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="复制当前配置">📋 复制</button>
+        <button id="btnDeleteProfile" class="px-3 py-2 text-sm bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50" title="删除当前配置">🗑️ 删除</button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Base URL</label>
+        <input id="apiBase" type="text" placeholder="https://api.openai.com/v1" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">API Key</label>
+        <input id="apiKey" type="password" placeholder="sk-..." class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Model</label>
+        <input id="apiModel" type="text" placeholder="gpt-4o-mini / deepseek-chat / qwen-plus" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Temperature</label>
+        <input id="apiTemp" type="number" step="0.1" min="0" max="2" value="0.7" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">Max Tokens</label>
+        <input id="apiMaxTokens" type="number" value="2000" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">英/西/葡 字符上限</label>
+        <input id="charLimit" type="number" value="55" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"/>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">中文字符上限</label>
+        <input id="charLimitCN" type="number" value="60" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg"/>
+      </div>
+    </div>
+
+    <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 mb-3">
+      <label class="block text-xs text-slate-500 mb-1.5">参与压缩的语种（仅勾选的语种会触发超限提示和重写）</label>
+      <div class="flex flex-wrap gap-4 text-sm">
+        <label class="flex items-center gap-1.5 cursor-pointer select-none"><input type="checkbox" id="shortenEn" class="w-4 h-4 accent-blue-600"/> 英语</label>
+        <label class="flex items-center gap-1.5 cursor-pointer select-none"><input type="checkbox" id="shortenEs" class="w-4 h-4 accent-blue-600"/> 西语</label>
+        <label class="flex items-center gap-1.5 cursor-pointer select-none"><input type="checkbox" id="shortenPt" class="w-4 h-4 accent-blue-600"/> 葡语</label>
+        <label class="flex items-center gap-1.5 cursor-pointer select-none"><input type="checkbox" id="shortenZh" class="w-4 h-4 accent-blue-600"/> 中文</label>
+      </div>
+    </div>
+    <div class="flex justify-between items-center">
+      <p class="text-xs text-slate-400">配置仅保存在本地浏览器，不会上传。字符上限为全局设置，不属于任一配置。</p>
+      <button id="btnSaveSettings" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存当前配置</button>
+    </div>
+  </section>
+
+  <!-- 全局 Prompt -->
+  <section class="bg-white border border-slate-200 rounded-xl mb-5 shadow-sm">
+    <details>
+      <summary class="px-5 py-3 flex items-center justify-between border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-slate-900">🌐 全局 Prompt（系统提示词）</span>
+          <span class="text-xs text-slate-400">点击展开编辑</span>
+        </div>
+        <button id="btnResetPrompt" onclick="event.preventDefault(); resetGlobalPrompt();" class="text-xs text-blue-600 hover:underline">恢复默认</button>
+      </summary>
+      <div class="p-5">
+        <p class="text-xs text-slate-500 mb-2">💡 提示：行首加 <code class="bg-slate-100 px-1 rounded">//</code> 或 <code class="bg-slate-100 px-1 rounded">#!</code> 可注释该行（不会发送给 AI）；<code class="bg-slate-100 px-1 rounded">{CHAR_LIMIT}</code> 和 <code class="bg-slate-100 px-1 rounded">{CHAR_LIMIT_CN}</code> 会自动替换成设置里的字符上限</p>
+        <textarea id="globalPrompt" rows="14" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg leading-relaxed"></textarea>
+        <div class="flex justify-end mt-2">
+          <button onclick="saveGlobalPrompt()" class="px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-900">保存全局 Prompt</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- 翻译预检 -->
+  <section class="bg-white border border-slate-200 rounded-xl p-5 mb-5 shadow-sm">
+    <div class="flex items-center justify-between mb-2">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-900">🌐 翻译预检（清洗原始词后再放入下方原始标题框）</h3>
+        <p class="text-xs text-slate-400 mt-0.5">粘贴原文到左侧 → 看右侧译文找出不需要的词 → 编辑左侧删词 → 一键发送到原始标题</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-slate-500">译文语言</label>
+        <select id="gtTargetLang" class="px-2 py-1 text-sm border border-slate-300 rounded-lg">
+          <option value="zh-CN">中文</option>
+          <option value="en">英语</option>
+          <option value="es">西语</option>
+          <option value="pt">葡语</option>
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">原文（可编辑）</label>
+        <textarea id="gtSource" rows="4" placeholder="粘贴原文，删除 Premium / Best / Hot Sale 等不需要的词后，下方按钮一键应用" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-500 mb-1">译文（自动，只读）</label>
+        <textarea id="gtTarget" rows="4" readonly placeholder="译文会在你点「翻译」后显示" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-slate-50"></textarea>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 mt-2 flex-wrap">
+      <button id="btnGTTranslate" class="px-3 py-1.5 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-900">🌐 翻译</button>
+      <button id="btnApplyToOriginal" class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">⬇️ 应用到原始标题</button>
+      <button id="btnClearGT" class="px-3 py-1.5 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">清空</button>
+      <span id="gtHint" class="text-xs text-slate-400"></span>
+    </div>
+  </section>
+
+  <!-- 主操作区 -->
+  <section class="bg-white border border-slate-200 rounded-xl p-5 mb-5 shadow-sm">
+    <label class="block text-sm font-semibold text-slate-900 mb-2">📝 原始标题（中文或英文）</label>
+    <textarea id="inputTitle" rows="3" placeholder="例：Heart Leather Leg Garters Belt with Clip, Adjustable Thigh Harness, Punk Style Accessories for Skirt" class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+
+    <details class="mt-3">
+      <summary class="text-sm font-medium text-slate-700 mb-2">
+        💬 本次会话 Prompt（可选，覆盖全局补充本次特殊要求）
+      </summary>
+      <textarea id="sessionPrompt" rows="3" placeholder="例：本次商品主打朋克风格，目标平台 Shein/亚马逊；西语主目标墨西哥站；强调'夏季'、'防滑'卖点" class="w-full mt-2 px-3 py-2 text-xs border border-slate-300 rounded-lg"></textarea>
+    </details>
+
+    <div class="flex items-center gap-3 mt-4 flex-wrap">
+      <button id="btnTranslate" class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+        🚀 生成四语标题
+      </button>
+      <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
+        <input type="checkbox" id="fastMode" class="w-4 h-4 accent-blue-600"/>
+        <span>⚡ 快速模式</span>
+        <span class="text-xs text-slate-400">（跳过自动压缩，超限时手动修）</span>
+      </label>
+      <span id="loadingHint" class="hidden text-sm text-slate-500"><span class="spinner align-middle"></span> AI 生成中…</span>
+      <span id="errorHint" class="hidden text-sm text-red-600"></span>
+    </div>
+  </section>
+
+  <!-- 压缩确认条 -->
+  <div id="shortenPrompt" class="hidden bg-amber-50 border border-amber-300 rounded-xl p-4 mb-5 shadow-sm"></div>
+
+  <!-- 输出区 -->
+  <section id="outputArea" class="hidden space-y-3"></section>
+  </div>
+  <!-- /flex-1 主内容 -->
+
+  <!-- 右侧悬浮利润计算器（sticky 跟随滚动） -->
+  <aside class="hidden lg:block w-[300px] flex-shrink-0">
+    <div class="sticky top-[35vh] space-y-3">
+      <div id="floatingCalc" class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+        <!-- 标题栏 -->
+        <div class="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">💰</span>
+            <span class="font-medium text-sm">利润计算器</span>
+          </div>
+          <button id="btnCalcMinimize" class="w-6 h-6 rounded hover:bg-white/20 flex items-center justify-center text-xs" title="最小化">━</button>
+        </div>
+        <!-- 主体 -->
+        <div id="calcBody" class="p-4">
+          <div>
+            <label class="block text-xs text-slate-500 mb-1">采购价格（¥）</label>
+            <input id="calcCost" type="number" step="0.01" placeholder="输入采购价..." class="w-full px-3 py-2 text-base border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-3">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-2.5">
+              <div class="text-[10px] text-green-700 font-medium uppercase tracking-wide">净收益价</div>
+              <div id="calcUsd" class="text-lg font-bold text-green-700 mt-0.5">$ --</div>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+              <div class="text-[10px] text-blue-700 font-medium uppercase tracking-wide">真实利润</div>
+              <div id="calcProfit" class="text-lg font-bold text-blue-700 mt-0.5">¥ --</div>
+            </div>
+          </div>
+          <details class="mt-3 group">
+            <summary class="flex items-center justify-between text-xs text-slate-500 cursor-pointer hover:text-slate-800 py-1.5 px-2 -mx-1 rounded hover:bg-slate-50">
+              <span class="flex items-center gap-1.5">
+                <span class="group-open:rotate-90 transition-transform inline-block">▶</span>
+                <span>固定参数</span>
+              </span>
+              <span id="calcSummary" class="text-[10px] text-slate-400"></span>
+            </summary>
+            <div class="mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+              <div>
+                <label class="block text-[10px] text-slate-500 mb-1">净收益利润率（%）</label>
+                <input id="calcMargin" type="number" step="0.1" value="30" class="w-full px-2 py-1.5 text-sm border border-slate-300 rounded"/>
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-500 mb-1">汇率（1 USD = ? ¥）</label>
+                <input id="calcRate" type="number" step="0.0001" value="7.2" class="w-full px-2 py-1.5 text-sm border border-slate-300 rounded"/>
+              </div>
+              <div>
+                <label class="block text-[10px] text-slate-500 mb-1">其他费用（¥）</label>
+                <input id="calcOther" type="number" step="0.01" value="0" class="w-full px-2 py-1.5 text-sm border border-slate-300 rounded"/>
+              </div>
+              <button id="btnSaveCalcParams" class="w-full px-2 py-1.5 text-xs bg-slate-800 text-white rounded hover:bg-slate-900 mt-1">💾 保存参数</button>
+            </div>
+          </details>
+          <p class="text-[10px] text-slate-400 mt-3 leading-relaxed">
+            净收益价 = (采购价 + 其他费) ÷ (1 − 利润率) ÷ 汇率<br>
+            真实利润 = 净收益价 × 汇率 − (采购价 + 其他费)
+          </p>
+        </div>
+      </div>
+      <button id="calcRestoreBtn" class="hidden w-full py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl shadow hover:shadow-md transition flex items-center justify-center gap-2 text-sm">
+        <span>💰</span><span>展开利润计算器</span>
+      </button>
+    </div>
+  </aside>
+</div>
+<!-- /max-w-[1400px] flex 容器 -->
+
+<!-- 历史抽屉 -->
+<div id="historyDrawer" class="hidden fixed inset-0 z-50 bg-black/40" onclick="if(event.target===this) toggleHistory()">
+  <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl overflow-y-auto">
+    <div class="p-5 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white">
+      <h2 class="font-semibold">历史记录</h2>
+      <div class="flex gap-2">
+        <button onclick="clearHistory()" class="text-xs text-red-600 hover:underline">清空</button>
+        <button onclick="toggleHistory()" class="text-slate-500 hover:text-slate-800">✕</button>
+      </div>
+    </div>
+    <div id="historyList" class="p-3 space-y-2"></div>
+  </div>
+</div>
+
+<script>
+// ===== 默认全局 Prompt =====
+const DEFAULT_GLOBAL_PROMPT = `你是资深跨境电商运营 + 多语言 SEO 专家，精通亚马逊/Shopee/Mercado Libre/Shein/速卖通的搜索算法和标题优化。
+
+【任务】输出四语标题：
+1. English（全球/北美/跨境大盘）
+2. Español（中性拉美西语，针对墨西哥/智利/哥伦比亚，避免西班牙本土用词）
+3. Português（巴西本土口语化电商表达，区别于葡萄牙葡语）
+4. 中文（淘宝/拼多多/虾皮台湾）
+
+【字符数硬规则 — 必须严格遵守】
+- 英语/西语/葡语：每条标题 **必须 ≤ {CHAR_LIMIT} 字符**（含空格），不允许超过哪怕 1 个字符
+- 中文：**必须 ≤ {CHAR_LIMIT_CN} 字符**（汉字=2字符，标点/数字/字母=1字符）
+- 输出前你必须**逐字符数一遍**：每写完一条标题，在心里数清字符数（含空格）
+- 如果数完发现超限，立即删掉次要形容词重写，直到 ≤ 上限
+- 宁可少 5 个字符也不要超 1 个字符
+
+【字符计数示范】
+"Punk Heart Leather Leg Garter with Clip Adjustable"
+= P-u-n-k(4) + 空格(1) + H-e-a-r-t(5) + 空格(1) + L-e-a-t-h-e-r(7) + 空格(1) + L-e-g(3) + 空格(1) + G-a-r-t-e-r(6) + 空格(1) + w-i-t-h(4) + 空格(1) + C-l-i-p(4) + 空格(1) + A-d-j-u-s-t-a-b-l-e(10) = 51 字符 ✓
+
+【内容规则】
+- **不要在标题里加数量单位**（如 1 Pcs、1 Pza、1 Un、1件装、1个装），除非用户明确告知是多件套装
+- 标题骨架 = 风格/材质标签 + 核心类目大词（高搜词） + 1-2个关键卖点
+- 不堆无意义形容词，每词承担 SEO 权重
+- 拼写 100% 正确，西/葡语重音必须对：Corazón、Coração、Ajustável、Aço Inoxidável
+
+【输出格式】只返回 JSON，不要任何前后文字、不要 markdown 代码块：
+{
+  "en": { "title": "..." },
+  "es": { "title": "...", "analysis": "核心大词 / 卖点 / 字符策略" },
+  "pt": { "title": "...", "analysis": "..." },
+  "zh": { "title": "..." }
+}
+注意：仅 es 和 pt 需要 analysis 字段，en 和 zh 只输出 title 即可（节省 token 加快速度）。`;
+
+// ===== 状态 =====
+const STORE = {
+  settings: 'translator_settings_v1',      // 旧版（仅迁移用）
+  profiles: 'translator_profiles_v1',      // 新：多配置
+  globalPrompt: 'translator_global_prompt_v1',
+  history: 'translator_history_v1',
+};
+
+// 预设模板（新建配置时可选）
+const PROFILE_PRESETS = {
+  '移动云 MiniMax': { base: 'https://zhenze-huhehaote.cmecloud.cn/v1', key: '', model: 'minimax-m2.5', temp: 0.7, maxTokens: 4096 },
+  'OpenAI': { base: 'https://api.openai.com/v1', key: '', model: 'gpt-4o-mini', temp: 0.7, maxTokens: 4000 },
+  'Gemini': { base: 'https://generativelanguage.googleapis.com/v1beta/openai', key: '', model: 'gemini-2.5-flash', temp: 0.7, maxTokens: 4000 },
+  'DeepSeek': { base: 'https://api.deepseek.com/v1', key: '', model: 'deepseek-chat', temp: 0.7, maxTokens: 4000 },
+  'OpenRouter': { base: 'https://openrouter.ai/api/v1', key: '', model: 'google/gemini-2.5-flash', temp: 0.7, maxTokens: 4000 },
+  '通义千问': { base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', key: '', model: 'qwen-plus', temp: 0.7, maxTokens: 4000 },
+  '空白': { base: '', key: '', model: '', temp: 0.7, maxTokens: 4000 },
+};
+
+// ===== 配置数据模型 =====
+function genId() { return 'p_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function loadProfilesStore() {
+  let data = JSON.parse(localStorage.getItem(STORE.profiles) || 'null');
+  if (!data) {
+    // 迁移旧版单配置
+    const old = JSON.parse(localStorage.getItem(STORE.settings) || 'null');
+    if (old && (old.base || old.key)) {
+      const id = genId();
+      data = {
+        profiles: [{ id, name: '默认配置', base: old.base || '', key: old.key || '', model: old.model || '', temp: old.temp ?? 0.7, maxTokens: old.maxTokens ?? 2000 }],
+        activeId: id,
+        charLimit: old.charLimit ?? 55,
+        charLimitCN: old.charLimitCN ?? 60,
+      };
+    } else {
+      const id = genId();
+      data = {
+        profiles: [{ id, name: '默认配置', ...PROFILE_PRESETS['空白'] }],
+        activeId: id,
+        charLimit: 55,
+        charLimitCN: 60,
+      };
+    }
+    localStorage.setItem(STORE.profiles, JSON.stringify(data));
+  }
+  return data;
+}
+function saveProfilesStore(data) {
+  localStorage.setItem(STORE.profiles, JSON.stringify(data));
+}
+function getActiveProfile() {
+  const data = loadProfilesStore();
+  return data.profiles.find(p => p.id === data.activeId) || data.profiles[0];
+}
+function getSettings() {
+  const data = loadProfilesStore();
+  const active = getActiveProfile();
+  return { ...active, charLimit: data.charLimit, charLimitCN: data.charLimitCN };
+}
+
+// ===== 渲染配置 UI =====
+function renderProfileSelect() {
+  const data = loadProfilesStore();
+  const opts = data.profiles.map(p =>
+    `<option value="${p.id}" ${p.id === data.activeId ? 'selected' : ''}>${escapeHtml(p.name)}${p.model ? ' · ' + escapeHtml(p.model) : ''}</option>`
+  ).join('');
+  document.getElementById('profileSelect').innerHTML = opts;
+  document.getElementById('profileQuickSwitch').innerHTML = opts;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+}
+
+function loadProfileToForm(profileId) {
+  const data = loadProfilesStore();
+  const p = data.profiles.find(x => x.id === profileId) || data.profiles[0];
+  document.getElementById('apiBase').value = p.base || '';
+  document.getElementById('apiKey').value = p.key || '';
+  document.getElementById('apiModel').value = p.model || '';
+  document.getElementById('apiTemp').value = p.temp ?? 0.7;
+  document.getElementById('apiMaxTokens').value = p.maxTokens ?? 2000;
+  document.getElementById('charLimit').value = data.charLimit ?? 55;
+  document.getElementById('charLimitCN').value = data.charLimitCN ?? 60;
+  const scope = data.shortenScope || { en: true, es: true, pt: true, zh: true };
+  document.getElementById('shortenEn').checked = scope.en !== false;
+  document.getElementById('shortenEs').checked = scope.es !== false;
+  document.getElementById('shortenPt').checked = scope.pt !== false;
+  document.getElementById('shortenZh').checked = scope.zh !== false;
+}
+
+function loadSettings() {
+  const data = loadProfilesStore();
+  renderProfileSelect();
+  loadProfileToForm(data.activeId);
+}
+
+function saveSettings() {
+  try {
+    const data = loadProfilesStore();
+    const p = data.profiles.find(x => x.id === data.activeId);
+    if (!p) { showError('未找到当前配置'); return; }
+    p.base = document.getElementById('apiBase').value.trim().replace(/\/$/, '');
+    p.key = document.getElementById('apiKey').value.trim();
+    p.model = document.getElementById('apiModel').value.trim();
+    p.temp = parseFloat(document.getElementById('apiTemp').value);
+    p.maxTokens = parseInt(document.getElementById('apiMaxTokens').value);
+    data.charLimit = parseInt(document.getElementById('charLimit').value);
+    data.charLimitCN = parseInt(document.getElementById('charLimitCN').value);
+    data.shortenScope = {
+      en: document.getElementById('shortenEn').checked,
+      es: document.getElementById('shortenEs').checked,
+      pt: document.getElementById('shortenPt').checked,
+      zh: document.getElementById('shortenZh').checked,
+    };
+    saveProfilesStore(data);
+    renderProfileSelect();
+    flash('已保存：' + p.name);
+  } catch (err) {
+    showError('保存失败：' + (err.message || err));
+  }
+}
+
+function switchProfile(id) {
+  try {
+    const data = loadProfilesStore();
+    if (!data.profiles.find(p => p.id === id)) return;
+    data.activeId = id;
+    saveProfilesStore(data);
+    loadProfileToForm(id);
+    renderProfileSelect();
+    const p = data.profiles.find(x => x.id === id);
+    flash('已切换到：' + p.name);
+  } catch (err) {
+    showError('切换失败：' + (err.message || err));
+  }
+}
+
+function newProfile() {
+  const presetNames = Object.keys(PROFILE_PRESETS);
+  const presetChoice = prompt(`选择预设模板（输入序号）：\n${presetNames.map((n, i) => `${i + 1}. ${n}`).join('\n')}`, '1');
+  if (presetChoice === null) return;
+  const idx = parseInt(presetChoice) - 1;
+  const presetName = presetNames[idx] || '空白';
+  const preset = PROFILE_PRESETS[presetName];
+  const name = prompt('为新配置命名：', presetName);
+  if (!name) return;
+  try {
+    const data = loadProfilesStore();
+    const id = genId();
+    data.profiles.push({ id, name, ...preset });
+    data.activeId = id;
+    saveProfilesStore(data);
+    loadProfileToForm(id);
+    renderProfileSelect();
+    flash('已新建：' + name);
+  } catch (err) {
+    showError('新建失败：' + (err.message || err));
+  }
+}
+
+function renameProfile() {
+  const data = loadProfilesStore();
+  const p = data.profiles.find(x => x.id === data.activeId);
+  if (!p) return;
+  const name = prompt('修改配置名称：', p.name);
+  if (!name || name === p.name) return;
+  try {
+    p.name = name;
+    saveProfilesStore(data);
+    renderProfileSelect();
+    flash('已重命名');
+  } catch (err) {
+    showError('重命名失败：' + (err.message || err));
+  }
+}
+
+function duplicateProfile() {
+  const data = loadProfilesStore();
+  const p = data.profiles.find(x => x.id === data.activeId);
+  if (!p) return;
+  try {
+    const id = genId();
+    const copy = { ...p, id, name: p.name + ' 副本' };
+    data.profiles.push(copy);
+    data.activeId = id;
+    saveProfilesStore(data);
+    loadProfileToForm(id);
+    renderProfileSelect();
+    flash('已复制：' + copy.name);
+  } catch (err) {
+    showError('复制失败：' + (err.message || err));
+  }
+}
+
+function deleteProfile() {
+  const data = loadProfilesStore();
+  if (data.profiles.length <= 1) {
+    showError('至少保留一个配置，无法删除');
+    return;
+  }
+  const p = data.profiles.find(x => x.id === data.activeId);
+  if (!p) return;
+  if (!confirm(`确认删除配置「${p.name}」？此操作不可撤销。`)) return;
+  try {
+    data.profiles = data.profiles.filter(x => x.id !== data.activeId);
+    data.activeId = data.profiles[0].id;
+    saveProfilesStore(data);
+    loadProfileToForm(data.activeId);
+    renderProfileSelect();
+    flash('已删除：' + p.name);
+  } catch (err) {
+    showError('删除失败：' + (err.message || err));
+  }
+}
+
+function loadGlobalPrompt() {
+  const p = localStorage.getItem(STORE.globalPrompt) || DEFAULT_GLOBAL_PROMPT;
+  document.getElementById('globalPrompt').value = p;
+}
+function saveGlobalPrompt() {
+  try {
+    localStorage.setItem(STORE.globalPrompt, document.getElementById('globalPrompt').value);
+    flash('全局 Prompt 已保存');
+  } catch (err) {
+    showError('保存失败：' + (err.message || err));
+  }
+}
+function resetGlobalPrompt() {
+  try {
+    document.getElementById('globalPrompt').value = DEFAULT_GLOBAL_PROMPT;
+    localStorage.removeItem(STORE.globalPrompt);
+    flash('已恢复默认 Prompt');
+  } catch (err) {
+    showError('恢复失败：' + (err.message || err));
+  }
+}
+
+function flash(msg) {
+  showToast(msg, 'success');
+}
+function showError(msg) {
+  showToast(msg, 'error');
+}
+
+// ===== Toast 系统 =====
+function ensureToastContainer() {
+  let c = document.getElementById('toastContainer');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'toastContainer';
+    c.className = 'fixed top-5 right-5 z-[9999] flex flex-col gap-2 pointer-events-none';
+    document.body.appendChild(c);
+  }
+  return c;
+}
+function showToast(msg, type = 'success', duration = 2200) {
+  const c = ensureToastContainer();
+  const t = document.createElement('div');
+  const cfg = {
+    success: { bg: 'bg-emerald-600', icon: '✓' },
+    error:   { bg: 'bg-rose-600',    icon: '✗' },
+    info:    { bg: 'bg-slate-700',   icon: 'ℹ' },
+  }[type] || { bg: 'bg-slate-700', icon: '•' };
+  t.className = `pointer-events-auto ${cfg.bg} text-white px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2 text-sm min-w-[200px] max-w-[360px] transition-all duration-300 transform translate-x-4 opacity-0`;
+  t.innerHTML = `<span class="text-base leading-none">${cfg.icon}</span><span class="flex-1 break-words">${escapeHtml(String(msg))}</span>`;
+  c.appendChild(t);
+  requestAnimationFrame(() => {
+    t.classList.remove('translate-x-4', 'opacity-0');
+  });
+  setTimeout(() => {
+    t.classList.add('opacity-0', 'translate-x-4');
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ===== 字符计数 =====
+// 英文/西语/葡语：原始长度（含空格）
+// 中文：一个汉字算 2 字符（按中文平台惯例）
+function countChars(text, isCN) {
+  if (!text) return 0;
+  if (!isCN) return text.length;
+  let n = 0;
+  for (const ch of text) {
+    n += /[一-鿿　-〿＀-￯]/.test(ch) ? 2 : 1;
+  }
+  return n;
+}
+
+// ===== Prompt 注释预处理 =====
+// 以 // 或 #! 开头的行（允许前置空白）会被剥掉再发给 AI
+function stripPromptComments(text) {
+  if (!text) return text;
+  return text
+    .split('\n')
+    .filter(line => {
+      const t = line.trimStart();
+      return !t.startsWith('//') && !t.startsWith('#!') && !t.startsWith('#！');
+    })
+    .join('\n');
+}
+async function callAI(systemPrompt, userMessage, onProgress) {
+  const s = getSettings();
+  if (!s.base || !s.key || !s.model) {
+    throw new Error('请先在「设置」中填写 API 配置');
+  }
+  const resp = await fetch(s.base + '/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + s.key,
+    },
+    body: JSON.stringify({
+      model: s.model,
+      temperature: s.temp,
+      max_tokens: s.maxTokens,
+      stream: true,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    }),
+  });
+  if (!resp.ok) {
+    const t = await resp.text();
+    throw new Error(`API 错误 ${resp.status}: ${t.slice(0, 200)}`);
+  }
+
+  // 流式读取
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+  let fullText = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') continue;
+      try {
+        const json = JSON.parse(data);
+        const delta = json.choices?.[0]?.delta?.content || '';
+        if (delta) {
+          fullText += delta;
+          if (onProgress) onProgress(fullText);
+        }
+      } catch {}
+    }
+  }
+
+  // 解析 JSON（容错）
+  let parsed;
+  const cleaned = stripCodeFence(fullText);
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    // 尝试提取首尾大括号
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (!m) {
+      throw new Error('AI 返回非 JSON 或被截断（建议把 Max Tokens 调到 4000+）：\n' + fullText.slice(0, 300));
+    }
+    try {
+      parsed = JSON.parse(m[0]);
+    } catch (e) {
+      throw new Error('JSON 解析失败（输出可能被截断，请把 Max Tokens 调大）：' + e.message + '\n内容片段：' + cleaned.slice(0, 300));
+    }
+  }
+  return parsed;
+}
+
+// 去除 markdown 代码块包裹：```json\n{...}\n``` → {...}
+function stripCodeFence(text) {
+  if (!text) return text;
+  let t = text.trim();
+  // 去 ```json 或 ``` 开头
+  t = t.replace(/^```(?:json|JSON)?\s*\n?/, '');
+  // 去结尾的 ```
+  t = t.replace(/\n?```\s*$/, '');
+  return t.trim();
+}
+
+// ===== 用户确认压缩 =====
+const LANG_LABEL = { en: '英语', es: '西语', pt: '葡语', zh: '中文' };
+function askUserShorten(overLangs, round) {
+  return new Promise((resolve) => {
+    const box = document.getElementById('shortenPrompt');
+    const detail = overLangs.map(it =>
+      `<span class="inline-block px-2 py-0.5 bg-white border border-amber-300 rounded text-xs mr-1.5 mb-1">${LANG_LABEL[it.lang]} <span class="text-red-600 font-semibold">${it.count}/${it.limit}</span></span>`
+    ).join('');
+    const roundHint = round === 0 ? '' : `<span class="text-xs text-amber-700 ml-2">（已压缩 ${round} 轮，仍未达标）</span>`;
+    box.innerHTML = `
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div class="flex-1 min-w-[280px]">
+          <div class="font-medium text-amber-900 mb-1.5">⚠️ 检测到 ${overLangs.length} 条标题超出字符上限${roundHint}</div>
+          <div class="flex flex-wrap">${detail}</div>
+          <div class="text-xs text-amber-700 mt-1.5">是否调用 AI 压缩重写？压缩会保留所有核心信息词，仅删除次要修饰词。</div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+          <button id="btnAcceptShorten" class="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium">✓ 压缩重写</button>
+          <button id="btnRejectShorten" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">保持现状</button>
+        </div>
+      </div>
+    `;
+    box.classList.remove('hidden');
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    document.getElementById('btnAcceptShorten').onclick = () => resolve(true);
+    document.getElementById('btnRejectShorten').onclick = () => resolve(false);
+  });
+}
+function hideShortenPrompt() {
+  document.getElementById('shortenPrompt').classList.add('hidden');
+}
+function listOverLimit(result, charLimit, charLimitCN, scope) {
+  const over = [];
+  for (const lang of ['en', 'es', 'pt', 'zh']) {
+    if (scope && scope[lang] === false) continue;
+    const isCN = lang === 'zh';
+    const limit = isCN ? charLimitCN : charLimit;
+    const title = result[lang]?.title || '';
+    const count = countChars(title, isCN);
+    if (count > limit) over.push({ lang, title, count, limit, isCN });
+  }
+  return over;
+}
+
+// ===== 自动压缩超限标题 =====
+async function shortenOverLimit(result, charLimit, charLimitCN, scope, onProgress) {
+  const overItems = listOverLimit(result, charLimit, charLimitCN, scope);
+  if (!overItems.length) return result;
+
+  if (onProgress) onProgress(`检测到 ${overItems.length} 条超限，正在压缩重写...`);
+
+  const langName = { en: '英语', es: '西语', pt: '葡语', zh: '中文' };
+  const taskList = overItems.map(it =>
+    `- ${langName[it.lang]}（当前 ${it.count} 字符，必须 ≤ ${it.limit}，需删减至少 ${it.count - it.limit + 3} 字符以预留余量）\n  原标题: "${it.title}"`
+  ).join('\n');
+
+  const shortenPrompt = `以下标题超出字符上限，需要重写到上限内。请严格遵守规则：
+
+${taskList}
+
+【硬性禁令 — 违反任何一条都不算合格】
+1. ❌ 禁止省略核心信息词（如 Handle 手柄、Stainless Steel 不锈钢、Mason Jar 等核心类目/材质/功能词）。如果原标题写了 Handle 而压缩后没有，意思就变了，**坚决不允许**。
+2. ❌ 禁止用同义词"暗示"被省略的词（例如不能省略 Handle 然后用 Boca Ancha 来暗指）。每个核心词都必须显式保留。
+3. ❌ 禁止截断单词（不能写 "Stainl" 代替 "Stainless"，不能写 "Adj." 代替 "Adjustable"）。
+
+【允许的压缩手段】
+✓ 删除可有可无的修饰词：Premium、Best、Quality、New、Hot Sale、Fashion、Top、Super 等
+✓ 删除单件数量单位（1 Pcs、1 Pza、1 Un、1件装、1个装 这类对单件商品无意义的尾缀）
+✓ 合并冗余表达：如 "Sharp Jaw Nails Cutter Trimmers" → "Sharp Nail Cutter"
+✓ 改用更短但同义的核心词（必须是同义，不是暗示）：例如 "Stainless Steel" → "Steel"（如果材质本就突出钢质）
+✓ 调整语序压缩空格
+✓ 删除可推断的卖点形容词（如 Travel、Portable 二选一）
+
+【字符规则】中文按汉字=2字符、其他=1字符；其他语言按原始长度（含空格）。每条至少留 3 字符余量。
+
+【输出】只返回 JSON，不要 markdown 不要代码块：
+{
+${overItems.map(it => `  "${it.lang}": { "title": "...", "analysis": "保留了哪些核心词，删了哪些次要词" }`).join(',\n')}
+}`;
+
+  const s = getSettings();
+  const resp = await fetch(s.base + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.key },
+    body: JSON.stringify({
+      model: s.model,
+      temperature: 0.2,
+      max_tokens: s.maxTokens,
+      messages: [{ role: 'user', content: shortenPrompt }],
+    }),
+  });
+  if (!resp.ok) return result;
+  const data = await resp.json();
+  const content = data.choices?.[0]?.message?.content || '';
+  let fix;
+  const cleaned = stripCodeFence(content);
+  try { fix = JSON.parse(cleaned); }
+  catch {
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) { try { fix = JSON.parse(m[0]); } catch { return result; } }
+    else return result;
+  }
+  // 合并修正
+  const merged = { ...result };
+  for (const it of overItems) {
+    if (fix[it.lang]?.title) {
+      merged[it.lang] = { ...merged[it.lang], ...fix[it.lang] };
+    }
+  }
+  return merged;
+}
+
+// ===== 主流程 =====
+document.getElementById('btnTranslate').addEventListener('click', async () => {
+  const input = document.getElementById('inputTitle').value.trim();
+  if (!input) { showError('请输入原始标题'); return; }
+
+  const s = getSettings();
+  const charLimit = s.charLimit ?? 55;
+  const charLimitCN = s.charLimitCN ?? 60;
+
+  let globalPrompt = (localStorage.getItem(STORE.globalPrompt) || DEFAULT_GLOBAL_PROMPT)
+    .replace(/\{CHAR_LIMIT\}/g, charLimit)
+    .replace(/\{CHAR_LIMIT_CN\}/g, charLimitCN);
+
+  const sessionPrompt = document.getElementById('sessionPrompt').value.trim();
+  let systemPrompt = globalPrompt;
+  if (sessionPrompt) {
+    systemPrompt += '\n\n【本次会话额外要求】\n' + sessionPrompt;
+  }
+  // 剥掉以 // 或 #! 开头的注释行
+  systemPrompt = stripPromptComments(systemPrompt);
+
+  const btn = document.getElementById('btnTranslate');
+  const loading = document.getElementById('loadingHint');
+  btn.disabled = true;
+  loading.classList.remove('hidden');
+  document.getElementById('errorHint').classList.add('hidden');
+
+  // 实时计时器（用 stage 控制显示阶段，避免被覆盖）
+  const startTs = Date.now();
+  let stage = { label: 'AI 生成中', detail: '' };
+  const setStage = (label, detail = '') => { stage = { label, detail }; };
+  let timerId = setInterval(() => {
+    const sec = ((Date.now() - startTs) / 1000).toFixed(1);
+    const extra = stage.detail ? ` · ${stage.detail}` : '';
+    loading.innerHTML = `<span class="spinner align-middle"></span> ${stage.label}${extra} · ${sec}s`;
+  }, 100);
+
+  try {
+    // 第一轮：流式生成
+    let lastChars = 0;
+    const result = await callAI(systemPrompt, `原始标题：\n${input}`, (text) => {
+      if (text.length - lastChars > 20) {
+        lastChars = text.length;
+        setStage('接收中', `${text.length} 字符`);
+      }
+    });
+
+    // 先渲染第一轮结果（用户立刻能看到）
+    setStage('解析完成', '正在校验字符数');
+    renderOutput(result, input, charLimit, charLimitCN);
+
+    // 快速模式：跳过自动压缩
+    const fastMode = document.getElementById('fastMode').checked;
+    localStorage.setItem('translator_fast_mode', fastMode ? '1' : '0');
+
+    if (fastMode) {
+      saveHistory({ input, sessionPrompt, result, ts: Date.now() });
+    } else {
+      // 取得当前压缩范围
+      const profData = loadProfilesStore();
+      const scope = profData.shortenScope || { en: true, es: true, pt: true, zh: true };
+      // 用户确认驱动的循环压缩
+      let current = result;
+      let round = 0;
+      while (true) {
+        const overLangs = listOverLimit(current, charLimit, charLimitCN, scope);
+        if (!overLangs.length) {
+          hideShortenPrompt();
+          break;
+        }
+        const accept = await askUserShorten(overLangs, round);
+        hideShortenPrompt();
+        if (!accept) break;
+        round++;
+        loading.classList.remove('hidden');
+        setStage(`第 ${round} 轮压缩`, `处理 ${overLangs.length} 条超限`);
+        const fixed = await shortenOverLimit(current, charLimit, charLimitCN, scope);
+        current = fixed;
+        renderOutput(current, input, charLimit, charLimitCN);
+        loading.classList.add('hidden');
+      }
+      saveHistory({ input, sessionPrompt, result: current, ts: Date.now() });
+    }
+
+    const totalSec = ((Date.now() - startTs) / 1000).toFixed(1);
+    flash(`完成（耗时 ${totalSec}s）`);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    clearInterval(timerId);
+    btn.disabled = false;
+    loading.classList.add('hidden');
+  }
+});
+
+// ===== 渲染输出 =====
+const LANG_META = {
+  en: { name: 'English', flag: '🇺🇸🇪🇺', desc: '全球 / 北美 / 跨境大盘', isCN: false },
+  es: { name: 'Español', flag: '🇲🇽🇨🇱🇨🇴', desc: '墨西哥 / 智利 / 哥伦比亚', isCN: false },
+  pt: { name: 'Português', flag: '🇧🇷', desc: '巴西站', isCN: false },
+  zh: { name: '中文', flag: '🇨🇳', desc: '淘宝 / 拼多多 / 虾皮台湾', isCN: true },
+};
+
+function renderOutput(result, input, charLimit, charLimitCN) {
+  const out = document.getElementById('outputArea');
+  out.innerHTML = '';
+  out.classList.remove('hidden');
+
+  for (const lang of ['en', 'es', 'pt', 'zh']) {
+    const meta = LANG_META[lang];
+    const item = result[lang] || {};
+    const title = item.title || '(无)';
+    const showAnalysis = (lang === 'es' || lang === 'pt');
+    const analysis = showAnalysis ? (item.analysis || '') : '';
+    const limit = meta.isCN ? charLimitCN : charLimit;
+    const count = countChars(title, meta.isCN);
+    let charClass = 'char-ok';
+    if (count > limit) charClass = 'char-over';
+    else if (count > limit * 0.95) charClass = 'char-warn';
+
+    const card = document.createElement('div');
+    card.className = 'lang-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md';
+    card.innerHTML = `
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">${meta.flag}</span>
+          <span class="font-semibold text-slate-900">${meta.name}</span>
+          <span class="text-xs text-slate-400">${meta.desc}</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs ${charClass}">${count} / ${limit} 字符</span>
+          <button class="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">复制</button>
+        </div>
+      </div>
+      <div class="font-mono text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-2 break-all select-all"></div>
+      ${analysis ? `<details class="mt-2" ${(lang === 'es' || lang === 'pt') ? 'open' : ''}><summary class="text-xs text-slate-500 hover:text-slate-800">📊 流量解析</summary><div class="text-xs text-slate-600 mt-1 leading-relaxed whitespace-pre-wrap"></div></details>` : ''}
+    `;
+    card.querySelector('.font-mono').textContent = title;
+    if (analysis) card.querySelector('details div').textContent = analysis;
+    card.querySelector('button').addEventListener('click', () => {
+      navigator.clipboard.writeText(title);
+      flash(`${meta.name} 已复制`);
+    });
+    out.appendChild(card);
+  }
+}
+
+// ===== 历史 =====
+function saveHistory(record) {
+  const hist = JSON.parse(localStorage.getItem(STORE.history) || '[]');
+  hist.unshift(record);
+  if (hist.length > 50) hist.length = 50;
+  localStorage.setItem(STORE.history, JSON.stringify(hist));
+}
+function clearHistory() {
+  if (!confirm('确认清空所有历史记录？')) return;
+  localStorage.removeItem(STORE.history);
+  renderHistory();
+}
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const hist = JSON.parse(localStorage.getItem(STORE.history) || '[]');
+  if (!hist.length) {
+    list.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">暂无历史</p>';
+    return;
+  }
+  list.innerHTML = hist.map((h, i) => {
+    const t = new Date(h.ts).toLocaleString('zh-CN');
+    const preview = (h.input || '').slice(0, 60);
+    return `<div class="border border-slate-200 rounded-lg p-3 hover:bg-slate-50 cursor-pointer" data-i="${i}">
+      <div class="text-xs text-slate-400 mb-1">${t}</div>
+      <div class="text-sm text-slate-700 truncate">${preview}</div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('[data-i]').forEach(el => {
+    el.addEventListener('click', () => {
+      const h = hist[parseInt(el.dataset.i)];
+      document.getElementById('inputTitle').value = h.input;
+      document.getElementById('sessionPrompt').value = h.sessionPrompt || '';
+      const s = getSettings();
+      renderOutput(h.result, h.input, s.charLimit ?? 55, s.charLimitCN ?? 60);
+      toggleHistory();
+    });
+  });
+}
+function toggleHistory() {
+  const d = document.getElementById('historyDrawer');
+  d.classList.toggle('hidden');
+  if (!d.classList.contains('hidden')) renderHistory();
+}
+
+// ===== 事件绑定 =====
+document.getElementById('btnSettings').addEventListener('click', () => {
+  document.getElementById('settingsPanel').classList.toggle('hidden');
+});
+document.getElementById('btnSaveSettings').addEventListener('click', saveSettings);
+document.getElementById('btnHistory').addEventListener('click', toggleHistory);
+
+document.getElementById('profileSelect').addEventListener('change', (e) => switchProfile(e.target.value));
+document.getElementById('profileQuickSwitch').addEventListener('change', (e) => switchProfile(e.target.value));
+document.getElementById('btnNewProfile').addEventListener('click', newProfile);
+document.getElementById('btnRenameProfile').addEventListener('click', renameProfile);
+document.getElementById('btnDuplicateProfile').addEventListener('click', duplicateProfile);
+document.getElementById('btnDeleteProfile').addEventListener('click', deleteProfile);
+
+// ===== 利润计算器 =====
+const CALC_STORE = 'translator_calc_params_v1';
+
+function loadCalcParams() {
+  const p = JSON.parse(localStorage.getItem(CALC_STORE) || '{}');
+  if (p.margin != null) document.getElementById('calcMargin').value = p.margin;
+  if (p.rate != null) document.getElementById('calcRate').value = p.rate;
+  if (p.other != null) document.getElementById('calcOther').value = p.other;
+  updateCalcSummary();
+}
+function saveCalcParams() {
+  try {
+    const p = {
+      margin: parseFloat(document.getElementById('calcMargin').value) || 0,
+      rate: parseFloat(document.getElementById('calcRate').value) || 0,
+      other: parseFloat(document.getElementById('calcOther').value) || 0,
+    };
+    localStorage.setItem(CALC_STORE, JSON.stringify(p));
+    flash('计算器参数已保存');
+    updateCalcSummary();
+    recalcProfit();
+  } catch (err) {
+    showError('保存失败：' + (err.message || err));
+  }
+}
+function updateCalcSummary() {
+  const m = parseFloat(document.getElementById('calcMargin').value) || 0;
+  const r = parseFloat(document.getElementById('calcRate').value) || 0;
+  const o = parseFloat(document.getElementById('calcOther').value) || 0;
+  document.getElementById('calcSummary').textContent = `利润率 ${m}% · 汇率 ${r} · 其他费 ¥${o}`;
+}
+function recalcProfit() {
+  const cost = parseFloat(document.getElementById('calcCost').value);
+  const marginPct = parseFloat(document.getElementById('calcMargin').value);
+  const rate = parseFloat(document.getElementById('calcRate').value);
+  const other = parseFloat(document.getElementById('calcOther').value) || 0;
+  const usdEl = document.getElementById('calcUsd');
+  const profitEl = document.getElementById('calcProfit');
+
+  if (isNaN(cost) || isNaN(marginPct) || isNaN(rate) || rate <= 0) {
+    usdEl.textContent = '$ --';
+    profitEl.textContent = '¥ --';
+    return;
+  }
+  const margin = marginPct / 100;
+  if (margin >= 1) {
+    usdEl.textContent = '利润率 ≥ 100%，无法计算';
+    profitEl.textContent = '¥ --';
+    return;
+  }
+  const totalCost = cost + other;
+  const netRevenue = totalCost / (1 - margin); // ¥
+  const usdPrice = netRevenue / rate;          // $
+  const profit = usdPrice * rate - totalCost;  // ¥
+
+  usdEl.textContent = '$ ' + usdPrice.toFixed(2);
+  profitEl.textContent = '¥ ' + profit.toFixed(2);
+}
+
+// 输入变化即时重算
+['calcCost', 'calcMargin', 'calcRate', 'calcOther'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    recalcProfit();
+    if (id !== 'calcCost') updateCalcSummary();
+  });
+});
+document.getElementById('btnSaveCalcParams').addEventListener('click', saveCalcParams);
+
+// 最小化 / 恢复
+const FLOAT_CALC_STATE = 'translator_calc_floating_state';
+document.getElementById('btnCalcMinimize').addEventListener('click', () => {
+  document.getElementById('floatingCalc').classList.add('hidden');
+  document.getElementById('calcRestoreBtn').classList.remove('hidden');
+  localStorage.setItem(FLOAT_CALC_STATE, 'minimized');
+});
+document.getElementById('calcRestoreBtn').addEventListener('click', () => {
+  document.getElementById('floatingCalc').classList.remove('hidden');
+  document.getElementById('calcRestoreBtn').classList.add('hidden');
+  localStorage.setItem(FLOAT_CALC_STATE, 'open');
+});
+// 恢复上次状态
+if (localStorage.getItem(FLOAT_CALC_STATE) === 'minimized') {
+  document.getElementById('floatingCalc').classList.add('hidden');
+  document.getElementById('calcRestoreBtn').classList.remove('hidden');
+}
+
+loadCalcParams();
+
+// ===== Google 翻译预检 =====
+async function googleTranslate(text, targetLang) {
+  if (!text.trim()) return '';
+  // 免费 endpoint，无需 key（依赖浏览器跨域放行；启动器版 Chrome 可用）
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('谷歌翻译请求失败 ' + resp.status);
+  const data = await resp.json();
+  // 返回结构：[[["译文片段1","原文片段1",...],["译文片段2",...]],null,"src_lang"]
+  const chunks = data[0] || [];
+  return chunks.map(c => c[0]).join('');
+}
+
+document.getElementById('btnGTTranslate').addEventListener('click', async () => {
+  const src = document.getElementById('gtSource').value;
+  const target = document.getElementById('gtTargetLang').value;
+  const hint = document.getElementById('gtHint');
+  const out = document.getElementById('gtTarget');
+  if (!src.trim()) { hint.textContent = '请先输入原文'; return; }
+  hint.textContent = '翻译中...';
+  try {
+    const t0 = Date.now();
+    const result = await googleTranslate(src, target);
+    out.value = result;
+    hint.textContent = `✓ 完成 (${((Date.now() - t0) / 1000).toFixed(1)}s)`;
+    setTimeout(() => hint.textContent = '', 2500);
+  } catch (e) {
+    hint.textContent = '✗ ' + e.message + '（如遇 CORS 错误，请用启动器打开）';
+  }
+});
+
+document.getElementById('btnApplyToOriginal').addEventListener('click', () => {
+  const src = document.getElementById('gtSource').value.trim();
+  if (!src) { document.getElementById('gtHint').textContent = '原文为空'; return; }
+  const target = document.getElementById('inputTitle');
+  target.value = src;
+  target.focus();
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const hint = document.getElementById('gtHint');
+  hint.textContent = '✓ 已应用到原始标题';
+  setTimeout(() => hint.textContent = '', 2500);
+});
+
+document.getElementById('btnClearGT').addEventListener('click', () => {
+  document.getElementById('gtSource').value = '';
+  document.getElementById('gtTarget').value = '';
+  document.getElementById('gtHint').textContent = '';
+});
+
+// 快捷键：Ctrl+Enter 在源框中触发翻译
+document.getElementById('gtSource').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('btnGTTranslate').click();
+  }
+});
+
+// ===== 初始化 =====
+loadSettings();
+loadGlobalPrompt();
+document.getElementById('fastMode').checked = localStorage.getItem('translator_fast_mode') === '1';
+</script>
+
+</body>
+</html>

@@ -1,0 +1,37 @@
+# ===== 浏览器临时数据 =====
+.chrome-profile/
+.webview-cache/
+
+# ===== 构建产物 =====
+build-log.txt
+*.msi
+*.exe
+!**/start.bat
+!**/build-desktop.bat
+!**/启动翻译工具.bat
+!**/一键打包桌面版.bat
+
+# ===== Pake / Tauri 中间产物 =====
+src-tauri/target/
+node_modules/
+dist/
+
+# ===== 系统/编辑器 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
+
+# ===== 用户本地数据（不应提交） =====
+*.local
+.env
+.env.local
+secrets.json
+
+# ===== 图标生成中间产物 =====
+# icon.svg 提交；icon.ico / icon.png 由用户本地生成
+icon.ico
+icon.png
