@@ -21,7 +21,8 @@ CSS 走 Tailwind CDN（`https://cdn.tailwindcss.com`），不要替换成本地�
 | **全局 Prompt** | 跨 profile 共享的主提示词，定义了翻译任务、4 个语种、JSON 输出 schema、字符限制规则 |
 | **会话 Prompt** | 单次翻译的额外提示词，附加在全局 Prompt 之后 |
 | **流量解析** | 西语/葡语输出中包含的关键词解析说明（为什么选这个词、搜索量大约多少），英语/中文不输出此字段 |
-| **压缩复检** | 超字符限制后调用 AI 重新压缩的二次请求，最多 2 轮 |
+| **分路并发** | 一次翻译拆成 2 路并发请求：A = en+zh（无 analysis），B = es+pt（含 analysis）。输出 token 是延迟主因，拆路后墙钟 ≈ 较慢那一路 |
+| **压缩复检** | 超字符限制后调用 AI 重新压缩的二次请求，最多 `MAX_SHORTEN_ROUNDS` 轮 |
 | **压缩范围** | 用户可选择哪些语种参与压缩（en/es/pt/zh 各自独立开关） |
 | **快速模式** | 跳过压缩复检的开关，trade off 精度换速度 |
 | **预检翻译** | 调 Google 免费翻译接口先核对原标题，可一键替换 |
@@ -44,6 +45,8 @@ CSS 走 Tailwind CDN（`https://cdn.tailwindcss.com`），不要替换成本地�
 | `fetchModels` / `testConnection` | 拉 `/models` 填充模型 datalist / 连通性测试（`/models` 失败回退一次 1-token 对话，并显示延迟；测试连接 `retry:0` 以保证延迟数字真实） |
 | `exportProfiles` / `parseImportPayload` / `applyImport` | 配置备份：导出 JSON（含全局 Prompt）/ 解析（兼容 4 种格式）/ 合并或覆盖写入 |
 | `pickProfileFields` / `downloadTextFile` | 导入导出共用的字段白名单过滤 / 通用文本下载（`proxy.txt` 也复用） |
+| `loadGlobalPrompt` / `saveGlobalPrompt` / `resetGlobalPrompt` | 全局 Prompt 读写 + 恢复默认；`loadGlobalPrompt` 会调 `migrateGlobalPrompt` 做一次旧版清理 |
+| `migrateGlobalPrompt` | 无损摘掉旧版 Prompt 里拖慢速度的「逐字符数一遍」和【字符计数示范】片段，其余自定义内容原样保留 |
 | `stripPromptComments` | 调 AI 前剥离 `//`、`#!`、`#！` 开头的行 |
 | `buildApiUrl` / `applyProxyPrefix` | 拼出最终请求地址；`prefix` 模式把原始地址接到代理地址之后（Google 预检也走这个函数） |
 | `makeRequestGate` / `normalizeFetchError` / `shouldRetry` / `backoffDelayMs` / `sleep` | 请求层五个原语：空闲超时闸门（收数据即重置 + 合并外部取消信号）/ 原始错误中文化并标注 取消·超时·网络错误 / 判定是否值得重试 / 指数退避+抖动（遵守 `Retry-After`）/ 可被取消打断的等待 |
@@ -52,7 +55,8 @@ CSS 走 Tailwind CDN（`https://cdn.tailwindcss.com`），不要替换成本地�
 | `stripCodeFence` | 剥离模型返回的 \`\`\`json ... \`\`\` 包裹 |
 | `googleTranslate` | 调 translate.googleapis.com 的非官方 endpoint |
 | `countChars` / `listOverLimit` | 字符计数（中文 1 字符算 2），找出超限的语种 |
-| `shortenOverLimit` / `askUserShorten` | 自动压缩复检 + 用户确认对话框 |
+| `buildRoutePrompt` | 在全局 Prompt 后追加「本次输出范围」覆盖段，收窄单路要输出的语种 |
+| `shortenOverLimit` / `askUserShorten` | 自动压缩复检 + 用户确认对话框。`shortenOverLimit` 返回 `{merged, ok}`，`ok=false` 表示压缩失败/无改动 |
 | `flash` / `showError` / `showToast` | Toast 提示系统（右上角浮窗） |
 | `recalcProfit` / `saveCalcParams` / `loadCalcParams` | 利润计算器 |
 | `saveHistory` | 翻译完成后写入历史 |
@@ -79,14 +83,16 @@ AI 必须返回如下结构（schema 在 `DEFAULT_GLOBAL_PROMPT` 中规定）：
 
 ```json
 {
-  "en":  { "title": "...", "keywords": "..." },
-  "es":  { "title": "...", "keywords": "...", "analysis": "..." },
-  "pt":  { "title": "...", "keywords": "...", "analysis": "..." },
-  "zh":  { "title": "...", "keywords": "..." }
+  "en":  { "title": "..." },
+  "es":  { "title": "...", "analysis": "..." },
+  "pt":  { "title": "...", "analysis": "..." },
+  "zh":  { "title": "..." }
 }
 ```
 
 `analysis` 字段只对 es/pt 输出（流量解析）。en/zh 不需要。
+
+⚠️ 实际请求时 4 个语种被拆成两路（A=en+zh / B=es+pt），`buildRoutePrompt` 会让每路只返回自己负责的字段，最终由主流程 `Object.assign` 合并。
 
 ## 字符计数规则
 
@@ -99,26 +105,44 @@ AI 必须返回如下结构（schema 在 `DEFAULT_GLOBAL_PROMPT` 中规定）：
 
 1. 首次 AI 返回 → 检测每个语种字符是否超限
 2. 找到超限的语种 + 用户 shortenScope 允许的语种 → 调 `askUserShorten` 弹确认框
-3. 用户同意 → 把超限的 title 列表作为 input 再调一次 AI（用专门的压缩 Prompt）
+3. 用户同意 → 把超限的 title 列表作为 input 再调一次 AI（用专门的压缩 Prompt，走 `callAI` 流式）
 4. 压缩 Prompt **明确禁止**：暗示核心词、用同义词替换、截断单词。允许：删形容词、删冗余修饰、合并同义短语
-5. 最多 2 轮（`MAX_RETRY = 2`），仍超限就停下让用户手动调整
+5. 最多 `MAX_SHORTEN_ROUNDS = 2` 轮，仍超限就停下并 toast 提示用户手动微调
+6. 压缩请求失败时不再静默——调用方收到 `ok=false` 会弹错误 toast 并保留原结果
 
 如果改动压缩逻辑，务必保留"禁止暗示/截断"的硬性约束，否则会破坏标题语义（这是用户明确反复强调过的）。
 
+## 并发与性能约定
+
+- **不要**把 4 个语种合回单个请求——输出 token 是主要延迟来源，拆成 A/B 两路是刻意设计。
+- **不要**在 Prompt 里重新加入「逐字符数一遍」「字符计数示范」这类要求。字符校验已由 `countChars` + 压缩复检兜底，让模型逐字数数会显著拖慢（尤其思考型模型）。
+- 增量渲染：每路返回后立刻 `renderOutput(merged, ...)`，先到的语种先显示，未到的暂时显示 `(无)`。
+- 单路失败用 `Promise.allSettled` 降级：两路都挂才抛错，只挂一路则 toast 提示并保留已有结果。
+
 ## 请求层约定（超时 / 重试 / 取消）
+
 `callAI` 的结构是「外层重试循环 + 内层 `requestOnce()` 单次请求」，改网络行为时注意保持这个分层：
+
 1. **超时用空闲口径，不要改成总时长**。`makeRequestGate` 的计时器在每次 `gate.bump()`（收到响应头、收到每个流式分片）时重置。改成固定总时长会误杀正常的流式长任务。
+2. **`gate.cleanup()` 必须落在 `finally`**，否则每次请求都会漏一个定时器和一个外部 signal 监听器。
 3. **可重试的判定集中在 `shouldRetry()`**，不要在别处再写一套。当前口径：429 / 5xx / 网络中断可重试；4xx、用户取消（`cancelled`）、空闲超时（`timeout`）都不可重试。
 4. **只有「一个字都没收到」时才允许重试**。流已经开始吐内容后再整体重试会造成重复输出，`requestOnce()` 里对此显式判断并抛「连接中断（已收到部分内容，未重试）」。
 5. **区分「取消」和「超时」靠 `gate.reason()`，不要靠错误类型**。Chrome 在不同路径下可能抛 `AbortError` 或我们传入的 abort reason，只有闸门自己知道是哪种。
 6. `fetchJsonWithRetry` 是给非流式小请求（`/models`、测试连接）用的，失败抛出的 error 带 `status` 字段；测试连接故意传 `retry: 0`，因为重试会让显示的延迟失真。
 7. 任何新的 `fetch` 都应该经过 `makeRequestGate`（现有的三处：`callAI`、`fetchJsonWithRetry`、`googleTranslate`），否则它既不会超时也不会被取消。
+
 ## 代理配置（双端）
+
 网页版与客户端版走代理的方式不同，但配置项是同一套（`profile.proxy`）：
+
+| 场景 | 做法 |
+| --- | --- |
 | 客户端版（Pake） | 默认回退**系统代理**（Clash 开系统代理 / TUN 即可）。要固定代理：把地址写进 `proxy.txt`，打包脚本会自动传给 `--proxy-url`（HTTP / HTTPS / SOCKS5 均可，macOS 需 14+） |
 | 网页版（Chrome 启动器） | 把地址写进工具目录的 `proxy.txt`（首行），`启动翻译工具.bat` 会自动加 `--proxy-server`。App 里「使用代理 → 本机/系统代理」下有「下载 proxy.txt」按钮 |
 | 有中转服务 | 配置里选 `HTTP 中转（请求前缀）`，请求会发往 `代理地址 + 接口地址`。适用于 one-api 网关 / cors 代理；本机 Clash 这类正向代理**不适用** |
+
 ⚠️ 浏览器页面无法给单个 `fetch` 指定代理，所以正向代理只能在 `system` 模式下生效（由启动器或系统层接管）。`proxy.txt` 已在 `.gitignore` 里，不会被提交。
+
 ## 桌面版打包（Pake）
 
 打包脚本 `一键打包桌面版.bat` 的关键设计：
@@ -176,6 +200,7 @@ try {
 5. **不要** 把 `flash()` 改回原先的 `errorHint` 文本提示（已升级成 toast）
 6. **不要** 提交 `.chrome-profile/`、`build-log.txt`、`*.msi`、`icon.ico`、`icon.png` — 这些都在 `.gitignore` 里
 7. **不要** 用 `alert()` / `confirm()` 替代 toast 来反馈普通操作结果（用户体验差异大）
+8. **不要** 把分路并发改回单次请求，也**不要** 在 Prompt 里重新加回「逐字符数一遍」类要求（两者都会显著拖慢速度）
 9. **不要** 移除 `proxy.txt` 约定 —— 网页版启动器与桌面打包脚本都靠它读取本机代理地址
 10. **不要** 绕过 `pickProfileFields` 直接把导入文件的对象写进 localStorage —— 白名单过滤同时承担了「丢弃未知字段」和「防 `__proto__` 污染」两件事
 11. **不要** 在导出内容里加入翻译历史 —— 备份只含「配置 + 全局 Prompt」，历史量大且含用户原始商品标题，属于隐私内容

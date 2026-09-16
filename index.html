@@ -238,6 +238,7 @@
       <button id="btnTranslate" class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
         🚀 生成四语标题
       </button>
+      <button id="btnCancel" class="hidden px-4 py-2.5 bg-white border border-red-300 text-red-600 font-medium rounded-lg hover:bg-red-50" title="中止本次生成，已生成的部分会保留">✕ 取消</button>
       <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
         <input type="checkbox" id="fastMode" class="w-4 h-4 accent-blue-600"/>
         <span>⚡ 快速模式</span>
@@ -349,13 +350,8 @@ const DEFAULT_GLOBAL_PROMPT = `你是资深跨境电商运营 + 多语言 SEO �
 【字符数硬规则 — 必须严格遵守】
 - 英语/西语/葡语：每条标题 **必须 ≤ {CHAR_LIMIT} 字符**（含空格），不允许超过哪怕 1 个字符
 - 中文：**必须 ≤ {CHAR_LIMIT_CN} 字符**（汉字=2字符，标点/数字/字母=1字符）
-- 输出前你必须**逐字符数一遍**：每写完一条标题，在心里数清字符数（含空格）
-- 如果数完发现超限，立即删掉次要形容词重写，直到 ≤ 上限
-- 宁可少 5 个字符也不要超 1 个字符
-
-【字符计数示范】
-"Punk Heart Leather Leg Garter with Clip Adjustable"
-= P-u-n-k(4) + 空格(1) + H-e-a-r-t(5) + 空格(1) + L-e-a-t-h-e-r(7) + 空格(1) + L-e-g(3) + 空格(1) + G-a-r-t-e-r(6) + 空格(1) + w-i-t-h(4) + 空格(1) + C-l-i-p(4) + 空格(1) + A-d-j-u-s-t-a-b-l-e(10) = 51 字符 ✓
+- 凭经验控制长度，不要逐字去数：写完一条若明显偏长，直接删掉次要形容词收缩
+- 宁可少 5 个字符也不要超 1 个字符（万一超限有后续自动压缩兜底，无需为此反复核对）
 
 【内容规则】
 - **不要在标题里加数量单位**（如 1 Pcs、1 Pza、1 Un、1件装、1个装），除非用户明确告知是多件套装
@@ -757,9 +753,27 @@ function deleteProfile() {
   }
 }
 
+// 旧版 Prompt 里的「逐字符数一遍」+【字符计数示范】会让模型真的去逐字数数，是主要延迟来源。
+// 这里做一次无损清理：只摘掉这两个拖慢速度的片段，用户其余的 Prompt 自定义内容原样保留。
+function migrateGlobalPrompt(p) {
+  if (!p) return p;
+  // 未命中旧片段就原样返回，绝不改动用户已自定义的 Prompt
+  if (!/逐字符数一遍|【字符计数示范】/.test(p)) return p;
+  // 1) 删掉「逐字符数一遍」那一整条
+  let out = p.split('\n').filter(line => !/逐字符数一遍/.test(line)).join('\n');
+  // 2) 删掉整段【字符计数示范】
+  out = out.replace(/【字符计数示范】[\s\S]*?\n\n/, '');
+  return out.replace(/\n{3,}/g, '\n\n').trim();
+}
 function loadGlobalPrompt() {
-  const p = localStorage.getItem(STORE.globalPrompt) || DEFAULT_GLOBAL_PROMPT;
+  const raw = localStorage.getItem(STORE.globalPrompt) || DEFAULT_GLOBAL_PROMPT;
+  const p = migrateGlobalPrompt(raw);
   document.getElementById('globalPrompt').value = p;
+  // 迁移生效则落盘，避免每次进来重复处理
+  if (p !== raw) {
+    try { localStorage.setItem(STORE.globalPrompt, p); } catch {}
+    console.info('[prompt] 已自动清理旧版 Prompt 中拖慢速度的「逐字符数一遍」/「字符计数示范」片段');
+  }
 }
 function saveGlobalPrompt() {
   try {
@@ -815,9 +829,6 @@ function showToast(msg, type = 'success', duration = 2200) {
     t.classList.add('opacity-0', 'translate-x-4');
     setTimeout(() => t.remove(), 300);
   }, duration);
-}
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
 // ===== 字符计数 =====
@@ -1137,9 +1148,12 @@ function listOverLimit(result, charLimit, charLimitCN, scope) {
 }
 
 // ===== 自动压缩超限标题 =====
-async function shortenOverLimit(result, charLimit, charLimitCN, scope, onProgress) {
+// 压缩轮次硬上限：超过就停手交还用户，避免无限循环
+const MAX_SHORTEN_ROUNDS = 2;
+// 返回 { merged, ok }：ok=false 表示压缩请求失败/未产生改动，调用方应保留原结果并提示
+async function shortenOverLimit(result, charLimit, charLimitCN, scope, onProgress, opts = {}) {
   const overItems = listOverLimit(result, charLimit, charLimitCN, scope);
-  if (!overItems.length) return result;
+  if (!overItems.length) return { merged: result, ok: true };
 
   if (onProgress) onProgress(`检测到 ${overItems.length} 条超限，正在压缩重写...`);
 
@@ -1172,36 +1186,69 @@ ${taskList}
 ${overItems.map(it => `  "${it.lang}": { "title": "...", "analysis": "保留了哪些核心词，删了哪些次要词" }`).join(',\n')}
 }`;
 
-  const s = getSettings();
-  const resp = await fetch(s.base + '/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.key },
-    body: JSON.stringify({
-      model: s.model,
-      temperature: 0.2,
-      max_tokens: s.maxTokens,
-      messages: [{ role: 'user', content: shortenPrompt }],
-    }),
-  });
-  if (!resp.ok) return result;
-  const data = await resp.json();
-  const content = data.choices?.[0]?.message?.content || '';
+  // 复用 callAI：走流式（防代理长连接被掐断、可显示进度），并统一 JSON 容错解析
   let fix;
-  const cleaned = stripCodeFence(content);
-  try { fix = JSON.parse(cleaned); }
-  catch {
-    const m = cleaned.match(/\{[\s\S]*\}/);
-    if (m) { try { fix = JSON.parse(m[0]); } catch { return result; } }
-    else return result;
+  try {
+    fix = await callAI(null, null, null, {
+      temperature: 0.2,
+      messages: [{ role: 'user', content: shortenPrompt }],
+      signal: opts.signal,
+      onRetry: opts.onRetry,
+    });
+  } catch (err) {
+    return { merged: result, ok: false };
   }
   // 合并修正
   const merged = { ...result };
+  let changed = false;
   for (const it of overItems) {
     if (fix[it.lang]?.title) {
       merged[it.lang] = { ...merged[it.lang], ...fix[it.lang] };
+      changed = true;
     }
   }
-  return merged;
+  return { merged, ok: changed };
+}
+
+// ===== 分路 Prompt =====
+// 在全局 Prompt 之后追加「本次输出范围」，收窄单次请求需要输出的语种，减少输出 token
+const LANG_EN_NAME = { en: 'English', es: 'Español', pt: 'Português', zh: '中文' };
+function buildRoutePrompt(basePrompt, langs) {
+  const pair = langs.map(l => {
+    const needAnalysis = (l === 'es' || l === 'pt');
+    return `  "${l}": { "title": "..."${needAnalysis ? ', "analysis": "..."' : ''} }`;
+  }).join(',\n');
+  return basePrompt + `
+
+【本次输出范围 — 优先于上文所有语种要求】
+本次只需输出：${langs.map(l => `${l}（${LANG_EN_NAME[l]}）`).join('、')}。其余语种字段直接省略，不要出现在 JSON 中。
+只返回如下 JSON，不要 markdown 代码块：
+{
+${pair}
+}`;
+}
+
+// ===== 运行控制（取消）=====
+// 同一时刻只允许一次生成；取消时 abort 掉所有在途请求，已渲染的部分结果保留。
+let activeRun = null;
+
+function beginRun() {
+  if (activeRun) activeRun.controller.abort();
+  const run = { controller: new AbortController(), cancelled: false };
+  run.signal = run.controller.signal;
+  activeRun = run;
+  return run;
+}
+function endRun(run) {
+  if (activeRun === run) activeRun = null;
+}
+function isRunCancelled(run) {
+  return !!(run && (run.cancelled || run.signal.aborted));
+}
+function cancelRun() {
+  if (!activeRun || activeRun.cancelled) return;
+  activeRun.cancelled = true;
+  activeRun.controller.abort();
 }
 
 // ===== 主流程 =====
@@ -1226,10 +1273,16 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
   systemPrompt = stripPromptComments(systemPrompt);
 
   const btn = document.getElementById('btnTranslate');
+  const btnCancel = document.getElementById('btnCancel');
   const loading = document.getElementById('loadingHint');
   btn.disabled = true;
+  btnCancel.classList.remove('hidden');
   loading.classList.remove('hidden');
   document.getElementById('errorHint').classList.add('hidden');
+
+  // 本次运行的取消信号，所有在途请求共用
+  const run = beginRun();
+  const callOpts = { signal: run.signal };
 
   // 实时计时器（用 stage 控制显示阶段，避免被覆盖）
   const startTs = Date.now();
@@ -1242,62 +1295,121 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
   }, 100);
 
   try {
-    // 第一轮：流式生成
-    let lastChars = 0;
-    const result = await callAI(systemPrompt, `原始标题：\n${input}`, (text) => {
-      if (text.length - lastChars > 20) {
-        lastChars = text.length;
-        setStage('接收中', `${text.length} 字符`);
-      }
-    });
+    // ===== 两路并发生成：A = 英/中（无 analysis），B = 西/葡（含 analysis）=====
+    // 输出 token 是延迟主因。拆两路后墙钟时间 ≈ 较慢那一路；谁先回来先渲染谁。
+    const ROUTES = [
+      { langs: ['en', 'zh'], label: '英/中' },
+      { langs: ['es', 'pt'], label: '西/葡' },
+    ];
+    const merged = {};
+    const gotChars = {};
+    const tick = () => {
+      const got = Object.keys(gotChars).length;
+      const chars = Object.values(gotChars).reduce((a, b) => a + b, 0);
+      setStage('AI 生成中', `${got}/${ROUTES.length} 路 · ${chars} 字符`);
+    };
 
-    // 先渲染第一轮结果（用户立刻能看到）
+    const settled = await Promise.allSettled(ROUTES.map(async (route) => {
+      const part = await callAI(
+        buildRoutePrompt(systemPrompt, route.langs),
+        `原始标题：\n${input}`,
+        (text) => { gotChars[route.label] = text.length; tick(); },
+        {
+          ...callOpts,
+          onRetry: ({ attempt, maxRetry, waitMs, why }) => {
+            gotChars[route.label] = 0;
+            setStage(`${route.label} 重试 ${attempt}/${maxRetry}`, `${why} · ${(waitMs / 1000).toFixed(1)}s 后重试`);
+          },
+        },
+      );
+      Object.assign(merged, part);
+      // 增量渲染：哪一路先回来就先出它的卡片
+      renderOutput(merged, input, charLimit, charLimitCN);
+      return part;
+    }));
+
+    // 用户点了取消：保留已生成的部分结果，不写历史、不进压缩流程
+    if (isRunCancelled(run)) throw new Error('已取消');
+
+    const failed = settled.filter(r => r.status === 'rejected');
+    if (failed.length === ROUTES.length) throw failed[0].reason;
+    if (failed.length) {
+      showToast(`部分语种生成失败：${failed[0].reason?.message || failed[0].reason}`, 'error', 4000);
+    }
+    if (!Object.keys(merged).length) throw new Error('AI 未返回任何内容，请检查配置或重试');
+
+    // 最终渲染 + 校验字符数
     setStage('解析完成', '正在校验字符数');
-    renderOutput(result, input, charLimit, charLimitCN);
+    renderOutput(merged, input, charLimit, charLimitCN);
 
     // 快速模式：跳过自动压缩
     const fastMode = document.getElementById('fastMode').checked;
     localStorage.setItem('translator_fast_mode', fastMode ? '1' : '0');
 
     if (fastMode) {
-      saveHistory({ input, sessionPrompt, result, ts: Date.now() });
+      saveHistory({ input, sessionPrompt, result: merged, ts: Date.now() });
     } else {
       // 取得当前压缩范围
       const profData = loadProfilesStore();
       const scope = profData.shortenScope || { en: true, es: true, pt: true, zh: true };
-      // 用户确认驱动的循环压缩
-      let current = result;
+      // 用户确认驱动的循环压缩（最多 MAX_SHORTEN_ROUNDS 轮）
+      let current = merged;
       let round = 0;
       while (true) {
+        if (isRunCancelled(run)) { hideShortenPrompt(); break; }
         const overLangs = listOverLimit(current, charLimit, charLimitCN, scope);
         if (!overLangs.length) {
           hideShortenPrompt();
           break;
         }
+        if (round >= MAX_SHORTEN_ROUNDS) {
+          hideShortenPrompt();
+          showToast(`已压缩 ${round} 轮仍有 ${overLangs.length} 条超限，请手动微调`, 'info', 3500);
+          break;
+        }
         const accept = await askUserShorten(overLangs, round);
         hideShortenPrompt();
-        if (!accept) break;
+        if (!accept || isRunCancelled(run)) break;
         round++;
         loading.classList.remove('hidden');
         setStage(`第 ${round} 轮压缩`, `处理 ${overLangs.length} 条超限`);
-        const fixed = await shortenOverLimit(current, charLimit, charLimitCN, scope);
-        current = fixed;
+        const res = await shortenOverLimit(current, charLimit, charLimitCN, scope, {
+          ...callOpts,
+          onRetry: ({ attempt, maxRetry, waitMs, why }) => {
+            setStage(`压缩重试 ${attempt}/${maxRetry}`, `${why} · ${(waitMs / 1000).toFixed(1)}s 后重试`);
+          },
+        });
+        if (!res.ok) {
+          loading.classList.add('hidden');
+          if (!isRunCancelled(run)) showError('压缩请求失败，已保留原结果（可重试或手动调整）');
+          break;
+        }
+        current = res.merged;
         renderOutput(current, input, charLimit, charLimitCN);
         loading.classList.add('hidden');
       }
+      if (isRunCancelled(run)) throw new Error('已取消');
       saveHistory({ input, sessionPrompt, result: current, ts: Date.now() });
     }
 
     const totalSec = ((Date.now() - startTs) / 1000).toFixed(1);
     flash(`完成（耗时 ${totalSec}s）`);
   } catch (err) {
-    showError(err.message);
+    if (isRunCancelled(run)) {
+      showToast('已取消（已生成的部分结果保留在下方）', 'info', 3000);
+    } else {
+      showError(err.message);
+    }
   } finally {
     clearInterval(timerId);
     btn.disabled = false;
+    btnCancel.classList.add('hidden');
     loading.classList.add('hidden');
+    endRun(run);
   }
 });
+
+document.getElementById('btnCancel').addEventListener('click', cancelRun);
 
 // ===== 渲染输出 =====
 const LANG_META = {
@@ -1693,12 +1805,26 @@ async function googleTranslate(text, targetLang) {
   if (!text.trim()) return '';
   // 免费 endpoint，无需 key（依赖浏览器跨域放行；启动器版 Chrome 可用）
   const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(targetLang)}&dt=t&q=${encodeURIComponent(text)}`;
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('谷歌翻译请求失败 ' + resp.status);
-  const data = await resp.json();
-  // 返回结构：[[["译文片段1","原文片段1",...],["译文片段2",...]],null,"src_lang"]
-  const chunks = data[0] || [];
-  return chunks.map(c => c[0]).join('');
+  // 跟随当前配置的代理：system 模式由浏览器/系统接管，prefix 模式走中转
+  const s = getSettings();
+  const external = activeRun ? activeRun.signal : null;
+  const gate = makeRequestGate({ timeoutMs: Math.max(0, (s.timeout ?? 120) * 1000), signal: external });
+  try {
+    const resp = await fetch(applyProxyPrefix(s, url), { signal: gate.signal });
+    gate.bump();
+    if (!resp.ok) throw new Error('谷歌翻译请求失败 ' + resp.status);
+    const data = await resp.json();
+    // 返回结构：[[["译文片段1","原文片段1",...],["译文片段2",...]],null,"src_lang"]
+    const chunks = data[0] || [];
+    return chunks.map(c => c[0]).join('');
+  } catch (err) {
+    // 只翻译「取消 / 超时」这两类，其余保留原始错误（调用方要提示 CORS 排查）
+    const norm = normalizeFetchError(err, gate, external);
+    if (norm.cancelled || norm.timeout) throw norm;
+    throw err;
+  } finally {
+    gate.cleanup();
+  }
 }
 
 document.getElementById('btnGTTranslate').addEventListener('click', async () => {
