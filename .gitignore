@@ -28,6 +28,8 @@ desktop.ini
 secrets.json
 # proxy.txt 是本机代理地址，由「API 配置 → 使用代理」里导出
 proxy.txt
+# 「API 配置 → 导出」生成的配置备份，含明文 API Key，切勿提交
+translator-config-*.json
 
 # ===== 图标生成中间产物 =====
 # icon.svg 提交；icon.ico / icon.png 由用户本地生成

@@ -12,8 +12,9 @@ CSS 走 Tailwind CDN（`https://cdn.tailwindcss.com`），不要替换成本地�
 
 | 名词 | 含义 |
 | --- | --- |
-| **Profile** | 一套 API 配置（base / key / model / temp / maxTokens），用户可保存任意多套并一键切换 |
+| **Profile** | 一套完整 API 配置：`name / base / key / model / temp / maxTokens / stream / charLimit / charLimitCN / proxy`，用户可保存任意多套并一键切换 |
 | **代理** | 配置级代理。`mode=system`：本机/系统代理，网页版靠启动器 `--proxy-server`、客户端版靠系统代理或 Pake `--proxy-url`；`mode=prefix`：HTTP 中转，请求地址前面拼上代理地址。注意正向代理（Clash 7890）只能走 system 模式 |
+| **配置备份** | 导出/导入全部 profile 的 JSON 文件，用于换机与清缓存前备份。文件内含**明文 API Key**；载荷为 profile + shortenScope + `globalPrompt`（仅当用户自己存过才非 null），**不含翻译历史** |
 | **空闲超时** | 按「多久没收到数据」计时，每收到一段流式内容就重置（`gate.bump()`）。所以流式长任务不会被误杀，只有真卡死才中止。配置项为 `profile.timeout` 秒，0 = 不限 |
 | **失败重试** | 仅对 429 / 5xx / 网络中断重试，指数退避 1s→2s→4s（上限 8s）+ 抖动，优先遵守 `Retry-After`。4xx、用户取消、空闲超时、以及「已经收到部分内容」的中断都不重试 |
 | **运行取消** | 一次生成 = 一个 `activeRun`（含一个 `AbortController`）。两路并发与压缩请求共用它的 signal；取消后保留已渲染的部分结果、不写历史 |
@@ -34,12 +35,14 @@ CSS 走 Tailwind CDN（`https://cdn.tailwindcss.com`），不要替换成本地�
 | --- | --- |
 | `loadProfilesStore` / `saveProfilesStore` | 读写 profile 数据（localStorage） |
 | `getActiveProfile` | 获取当前选中的 profile 对象 |
-| `switchProfile`, `newProfile`, `renameProfile`, `duplicateProfile`, `deleteProfile` | profile CRUD，每个都带 try/catch 和 toast 提示 |
+| `switchProfile`, `newProfile`, `duplicateProfile`, `deleteProfile` | profile CRUD，每个都带 try/catch 和 toast 提示（重命名已改为表单内直接编辑，无独立函数） |
+| `normalizeProfile` / `uniqueProfileName` | 补齐配置新增字段（stream / charLimit / proxy）/ 生成不重名的配置名 |
 | `loadProfileToForm` / `renderProfileSelect` | 把 profile 数据填充到 UI 表单 / 下拉菜单 |
-| `saveSettings` | 保存当前 profile（点击"保存当前配置"按钮时触发） |
-| `loadGlobalPrompt` / `saveGlobalPrompt` / `resetGlobalPrompt` | 全局 Prompt 读写 + 恢复默认 |
+| `readFormToProfile` / `saveSettings` | 表单 → 配置对象（保存 / 测试连接 / 获取模型 三处共用）/ 保存当前配置 |
 | `updateProxyUI` / `downloadProxyTxt` | 代理区块显隐与模式提示 / 导出 `proxy.txt`（供网页版启动器读取） |
 | `fetchJsonWithRetry` | 单次 GET/POST（带空闲超时 + 429/5xx 重试）；`fetchModels` / `testConnection` 都走它，失败抛出的 error 带 `status` |
+| `fetchModels` / `testConnection` | 拉 `/models` 填充模型 datalist / 连通性测试（`/models` 失败回退一次 1-token 对话，并显示延迟；测试连接 `retry:0` 以保证延迟数字真实） |
+| `exportProfiles` / `parseImportPayload` / `applyImport` | 配置备份：导出 JSON（含全局 Prompt）/ 解析（兼容 4 种格式）/ 合并或覆盖写入 |
 | `pickProfileFields` / `downloadTextFile` | 导入导出共用的字段白名单过滤 / 通用文本下载（`proxy.txt` 也复用） |
 | `stripPromptComments` | 调 AI 前剥离 `//`、`#!`、`#！` 开头的行 |
 | `buildApiUrl` / `applyProxyPrefix` | 拼出最终请求地址；`prefix` 模式把原始地址接到代理地址之后（Google 预检也走这个函数） |
@@ -60,10 +63,11 @@ CSS 走 Tailwind CDN（`https://cdn.tailwindcss.com`），不要替换成本地�
 
 ```js
 const STORE = {
-  profiles:     'translator_profiles_v1',       // 所有 API 配置 + 字符上限 + shortenScope
+  profiles:     'translator_profiles_v1',       // 所有 API 配置 + shortenScope + schemaVersion
   globalPrompt: 'translator_global_prompt_v1',
   history:      'translator_history_v1',
 };
+// schemaVersion=2：字符上限从 store 级下放到每个配置（loadProfilesStore 里做一次性迁移）
 const CALC_STORE = 'translator_calc_params_v1';
 const FLOAT_CALC_STATE = 'translator_calc_floating_state';
 const FAST_MODE = 'translator_fast_mode';
@@ -173,6 +177,8 @@ try {
 6. **不要** 提交 `.chrome-profile/`、`build-log.txt`、`*.msi`、`icon.ico`、`icon.png` — 这些都在 `.gitignore` 里
 7. **不要** 用 `alert()` / `confirm()` 替代 toast 来反馈普通操作结果（用户体验差异大）
 9. **不要** 移除 `proxy.txt` 约定 —— 网页版启动器与桌面打包脚本都靠它读取本机代理地址
+10. **不要** 绕过 `pickProfileFields` 直接把导入文件的对象写进 localStorage —— 白名单过滤同时承担了「丢弃未知字段」和「防 `__proto__` 污染」两件事
+11. **不要** 在导出内容里加入翻译历史 —— 备份只含「配置 + 全局 Prompt」，历史量大且含用户原始商品标题，属于隐私内容
 12. **不要** 把 `makeRequestGate` 的空闲超时改成总时长超时，也**不要**在用户取消/超时后仍然重试
 13. **不要** 移除「已收到部分内容则不重试」的判断 —— 否则流中断重试会让标题内容重复拼接
 
@@ -180,15 +186,21 @@ try {
 
 没有自动化测试。手动验证清单：
 
-1. 启动 `启动翻译工具.bat`，确认 4 个语种都能输出 JSON
+1. 启动 `启动翻译工具.bat`，确认 4 个语种都能输出 JSON；正常网络下应能看到两路各自先出卡（先到先渲染）
 2. 故意把字符上限设小（如 30），确认触发压缩复检并弹确认框
-3. 保存 / 切换 / 新建 / 删除 profile 都能弹 toast
-4. 利润计算器输入采购价能实时显示 USD 价 + CNY 利润
-5. Google 预检翻译能调通并能"应用到原始标题"
-6. 历史记录能正常写入并复用
+3. 保存 / 切换 / 新建 / 删除 profile 都能弹 toast；配置名在表单里改完点保存，下拉框同步更新
+4. 「获取模型列表」能填充模型下拉；「测试连接」能返回延迟
+5. 关掉「使用流式输出」后仍能正常翻译（走非流式分支）
+6. 字符上限已是每配置独立：切到另一个配置，上限值跟着变
+7. 「导出」能下载 JSON；把该文件重新「导入 → 合并」，配置数量翻倍且重名自动加序号；「覆盖导入」后只剩文件里的配置
+8. 故意导入一个非 JSON 文件 / 内容里没有 `profiles` 的文件，应弹出明确的错误 toast（不能静默失败）
+9. 文件里带 Prompt 时，导入对话框会出现「同时导入全局 Prompt」勾选项；不勾时当前 Prompt 必须原样保留
 10. 生成中点「✕ 取消」：立即停止、保留已出卡片、不写历史；点取消后不再有网络请求
 11. 把「请求超时」设成 5 秒 + 用一个超长输出的模型，确认流式过程中不会误报超时（每收到数据会重置计时）
 12. 用一个会返回 429/503 的接口（或临时改错 base），确认界面出现「重试 1/2 · 服务端错误 5xx」并在退避后恢复；4xx 则应立即报错不重试
+13. 利润计算器输入采购价能实时显示 USD 价 + CNY 利润
+14. Google 预检翻译能调通并能"应用到原始标题"
+15. 历史记录能正常写入并复用
 
 ## 常见踩坑
 
@@ -202,6 +214,7 @@ try {
 - **一直转圈没有输出**：个别中转网关不支持 SSE，关掉配置里的「使用流式输出」；也可以点「✕ 取消」直接停
 - **频繁报「请求超过 N 秒没有收到数据」**：说明网关长时间不吐数据（或代理在掉包）。调大配置里的「请求超时」，或换直连更稳的端点；注意这是**空闲**超时，正常的慢速流式不会被它误杀
 - **脚本里改测试时注意**：从 `index.html` 里正则抽函数做单测时，按「行首单列 `}`」切分比花括号配对可靠——参数里的解构 `= {}` 会让配对提前结束
+- **导入提示「文件里没有找到任何配置」**：文件需是完整 JSON，顶层含 `profiles` 数组（裸 store / `{data:{profiles}}` / 配置数组 / 单套配置对象都支持）。若选错了文件（如 HTML、任意文本），会直接报「不是合法的 JSON 文件」
 
 ## 提交规范
 
