@@ -26,6 +26,8 @@ desktop.ini
 .env
 .env.local
 secrets.json
+# proxy.txt 是本机代理地址，由「API 配置 → 使用代理」里导出
+proxy.txt
 
 # ===== 图标生成中间产物 =====
 # icon.svg 提交；icon.ico / icon.png 由用户本地生成

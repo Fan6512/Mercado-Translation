@@ -57,16 +57,29 @@ if not errorlevel 1 (
 )
 
 set "INDEX=%HERE%index.html"
-set "FILE_URL=file:///%INDEX:\=/%"
 
-echo Entry : %FILE_URL% >> "%LOG%"
+REM ---- 可选代理：同目录 proxy.txt 首行会被传给 Pake 的 --proxy-url ----
+REM 留空则回退系统代理（Clash 开系统代理/TUN 即可）。地址不能含空格。
+set "PROXY_URL="
+if exist "%HERE%proxy.txt" (
+    for /f "usebackq tokens=* delims=" %%L in ("%HERE%proxy.txt") do (
+        if not defined PROXY_URL if not "%%L"=="" set "PROXY_URL=%%L"
+    )
+)
+set "PAKE_PROXY="
+if defined PROXY_URL set PAKE_PROXY=--proxy-url %PROXY_URL%
+
+echo Entry : %INDEX% >> "%LOG%"
 echo Icon  : %HERE%icon.ico >> "%LOG%"
+if defined PROXY_URL (echo Proxy : %PROXY_URL% >> "%LOG%") else (echo Proxy : (system default) >> "%LOG%")
 echo. >> "%LOG%"
 echo Running pake-cli... this can take 5-15 minutes on first run. >> "%LOG%"
 echo Running pake-cli... this can take 5-15 minutes on first run.
+if defined PROXY_URL echo Proxy  : %PROXY_URL%
 echo.
 
-call cmd /c ""%VCVARS%" && npx -y pake-cli "%FILE_URL%" --name "Translator" --icon "%HERE%icon.ico" --width 1400 --height 900 --use-local-file" >> "%LOG%" 2>&1
+REM Pass the local file path directly (not file:// URL) so --use-local-file properly embeds resources
+call cmd /c ""%VCVARS%" && npx -y pake-cli "%INDEX%" --name "Translator" --icon "%HERE%icon.ico" --width 1400 --height 900 --use-local-file %PAKE_PROXY%" >> "%LOG%" 2>&1
 
 echo. >> "%LOG%"
 echo Exit code: %ERRORLEVEL% >> "%LOG%"
