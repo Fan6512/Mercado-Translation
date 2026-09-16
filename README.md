@@ -50,6 +50,8 @@
 
 第二次起打包只要 2-3 分钟（依赖已缓存）。
 
+打包成功后，安装包（`.msi` / `.exe`）会自动复制到 `dist/` 目录（已被 `.gitignore` 忽略，不入库）；需要释放磁盘空间时双击 `clean.bat` 即可清理 `dist/`、`.chrome-profile`、`build-log.txt` 等产物。
+
 ### 配置 API
 
 任意 OpenAI 兼容协议的服务都可以接入，包括但不限于：
@@ -96,11 +98,10 @@
 ├── index.html                  # 主应用（单文件，含全部 UI + 逻辑）
 ├── icon.svg                    # 应用图标设计源（SVG）
 ├── 生成图标.html               # 用浏览器从 SVG 生成 icon.png / icon.ico
-├── start.bat                   # 启动带 --disable-web-security 的独立 Chrome
-├── 启动翻译工具.bat            # start.bat 的中文友好版（带提示）
-├── 启动翻译工具(静默).vbs      # 后台启动 start.bat（无黑窗口）
-├── 一键打包桌面版.bat          # 用 Pake 打包成 .msi
-├── build-desktop.bat           # 同上，纯英文版备份
+├── 启动翻译工具.bat            # 启动带 --disable-web-security 的独立 Chrome
+├── 启动翻译工具(静默).vbs      # 后台启动 启动翻译工具.bat（无黑窗口）
+├── clean.bat                  # 清理构建产物/运行时缓存（不入库）
+├── 一键打包桌面版.bat          # 用 Pake 打包成 .msi（产物复制到 dist/）
 ├── README.md                   # 本文件
 ├── AGENTS.md                   # 给 AI 协作者的指导
 ├── LICENSE                     # MIT

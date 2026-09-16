@@ -6,10 +6,6 @@
 build-log.txt
 *.msi
 *.exe
-!**/start.bat
-!**/build-desktop.bat
-!**/启动翻译工具.bat
-!**/一键打包桌面版.bat
 
 # ===== Pake / Tauri 中间产物 =====
 src-tauri/target/

@@ -49,6 +49,13 @@ if not exist "%HERE%icon.ico" (
     goto END
 )
 
+REM ---- Warn if path contains non-ASCII characters ----
+echo "%HERE%" | findstr /R "[^ -~]" >nul
+if not errorlevel 1 (
+    echo [WARNING] Current path contains non-ASCII characters. Move to pure ASCII path for portable build. >> "%LOG%"
+    echo [WARNING] Current path contains non-ASCII characters. Move to pure ASCII path for portable build.
+)
+
 set "INDEX=%HERE%index.html"
 set "FILE_URL=file:///%INDEX:\=/%"
 
@@ -90,6 +97,28 @@ for /f "delims=" %%d in ('dir /b /s /ad "%LOCALAPPDATA%\npm-cache\_npx\*pake-cli
     )
 )
 echo.
+
+REM ---- 复制构建产物到 dist/（已被 .gitignore 忽略，不入库）----
+if not exist "%HERE%dist" mkdir "%HERE%dist"
+set "INSTALLER_COPIED=0"
+for /f "delims=" %%d in ('dir /b /s /ad "%LOCALAPPDATA%\npm-cache\_npx\*pake-cli" 2^>nul') do (
+    if exist "%%d\src-tauri\target\release\bundle\msi\*.msi" (
+        copy /y "%%d\src-tauri\target\release\bundle\msi\*.msi" "%HERE%dist\" >nul
+        set "INSTALLER_COPIED=1"
+    )
+    if exist "%%d\src-tauri\target\release\bundle\nsis\*.exe" (
+        copy /y "%%d\src-tauri\target\release\bundle\nsis\*.exe" "%HERE%dist\" >nul
+    )
+    if exist "%%d\src-tauri\target\release\pake-translator.exe" (
+        copy /y "%%d\src-tauri\target\release\pake-translator.exe" "%HERE%dist\" >nul
+    )
+)
+if "%INSTALLER_COPIED%"=="1" (
+    echo.
+    echo Installer copied to: %HERE%dist\
+    dir /b "%HERE%dist\"
+)
+
 
 :END
 echo.
