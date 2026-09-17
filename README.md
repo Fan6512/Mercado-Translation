@@ -1,205 +1,411 @@
 # 跨境电商多语种标题翻译工具
 
-> 单文件 HTML 应用，团队内部使用。AI 驱动的跨境电商商品标题翻译（输入中/英，输出英/西/葡/中四语），自带字符限制控制、SEO 关键词优化、Google Translate 预检、跨境利润计算器，可一键打包成 Windows 桌面应用。
+AI 驱动的跨境电商商品标题翻译工具。输入中文或英文标题，可同时生成英语、西班牙语、葡萄牙语和中文电商标题，并提供字符限制控制、SEO 关键词优化、Google Translate 预检、自动压缩复检、历史记录和跨境利润计算器。
 
-## ✨ 功能特性
+项目采用轻量化前端架构：无需 Node 运行时、无需 Web 服务器、无需打包器即可使用；HTML、CSS 与 JavaScript 已按职责拆分，仍保持 Windows 本地直接运行和 Pake 桌面打包能力。
 
-- **四语同时输出**：English（全球/北美） / Español（中性拉美西语） / Português（巴西本土） / 中文（淘宝/拼多多/虾皮台湾风格）
-- **严格字符限制**：默认 EN/ES/PT 上限 55，CN 上限 60（汉字按 2 计算），可自定义
-- **SEO 关键词优化**：每个语种生成高搜索量关键词，并提供流量解析说明（西语/葡语）
-- **自动压缩复检**：超限标题自动调用 AI 重新压缩，禁止暗示/截断/同义替换核心词
-- **多 API 配置**：内置 7 个预设（OpenAI / Gemini / DeepSeek / 通义千问 / OpenRouter / 移动云 MiniMax / 空白），可保存任意多套配置一键切换；支持代理、超时、重试、流式开关，并能一键导出/导入备份
-- **稳得住的长请求**：空闲超时自动中止卡死的连接、429/5xx 自动指数退避重试、生成中可随时「✕ 取消」并保留已生成的部分结果
-- **Google Translate 预检**：在调用 AI 前可先用 Google 翻译核对原文语义，并一键替换原标题
-- **跨境利润计算器**：浮动侧栏，输入采购价实时计算 USD 净收益价 + 真实利润，固定参数（利润率、汇率、其他费用）持久化
-- **可注释的 Prompt**：以 `//`、`#!`、`#！` 开头的行会在调用 AI 前自动剥离，便于灵活管理 Prompt
-- **历史记录**：所有翻译结果本地保存，可一键复用
-- **桌面应用**：可用 Pake 打包成独立 .msi 安装包（约 90MB，内置 WebView2 运行时，不依赖用户安装 Chrome）
+## 功能特性
 
-## 🚀 快速开始
+- **四语输出**：English / Español（拉美） / Português（巴西） / 中文。
+- **字符限制**：默认 EN/ES/PT 上限 55，CN 上限 60；中文按汉字 2 字符计数。
+- **SEO 标题优化**：西语与葡语输出关键词和流量解析说明。
+- **双路并发生成**：EN+ZH 与 ES+PT 两路并发，减少整体等待时间。
+- **自动压缩复检**：超限后可调用 AI 重写，最多 2 轮，并保留核心信息词。
+- **部分结果保护**：任一路失败时保留已生成结果，但不写历史、不进入压缩、不伪装成完整成功。
+- **多 API 配置**：支持 OpenAI、Gemini、DeepSeek、通义千问、OpenRouter、移动云 MiniMax 及通用 OpenAI-compatible 接口。
+- **Provider Adapter**：自动兼容 `max_tokens` / `max_completion_tokens` 等模型参数差异。
+- **流式响应**：支持 SSE、空闲超时、取消、429/5xx 自动重试和指数退避。
+- **Google Translate 预检**：AI 调用前核对原标题语义。
+- **配置导入导出**：多套 API 配置可整体备份与迁移。
+- **历史记录**：仅完整四语结果写入本地历史。
+- **利润计算器**：输入采购价实时计算 USD 净收益价和 CNY 真实利润。
+- **Windows 桌面版**：可使用 Pake 打包为 `.msi` / `.exe`。
 
-### 方式一：浏览器直接打开（推荐用于尝试）
+## 快速开始
 
-由于 AI 调用涉及跨域，需要关闭浏览器跨域检查才能正常工作。
+### 方式一：安全浏览器模式
 
-1. 下载或克隆本仓库
-2. 双击 `启动翻译工具.bat`（首次会启动一个独立 Chrome 实例并关闭跨域，仅用于本工具，不要拿它访问别的网站）
-3. 在右上角"⚙ API 设置"中填写 API 地址、密钥、模型名，保存即可使用
+1. 下载或克隆仓库。
+2. 双击 `启动翻译工具.bat`。
+3. 在右上角「设置」中填写 API Base、API Key 和模型名。
+4. 保存配置后即可使用。
 
-> 已预装 Chrome 的 Windows 用户都能直接用。其他系统需要手动启动 Chrome 并附加 `--disable-web-security --user-data-dir=<空目录>` 参数。
+默认启动器**不会关闭 Chrome Web Security**。因此目标 API 或中转服务需要允许浏览器 CORS。
 
-### 方式二：打包成桌面应用（推荐用于团队分发）
+如果 API 不支持 CORS，优先建议使用桌面版，或者配置支持 CORS 的 HTTP 中转。
 
-打包成独立 Windows .msi 安装包，不依赖用户系统安装 Chrome，启动后是独立窗口、独立任务栏图标，跟原生软件一样。
+### 方式二：兼容模式
 
-**前置依赖**（一次性安装）：
+仓库保留：
 
-1. [Node.js LTS](https://nodejs.org/)
-2. [Rust 工具链](https://rustup.rs/)（rustup-init.exe，全程默认即可）
-3. [Visual Studio Build Tools 2022](https://visualstudio.microsoft.com/zh-hans/visual-cpp-build-tools/) → 单个组件页面勾选：
-   - MSVC v143 - VS 2022 C++ x64/x86 生成工具
-   - Windows 11 SDK（最新版即可）
-4. 安装完三项后 **重启电脑** 一次（让环境变量生效）
-
-**打包步骤**：
-
-1. 双击 `生成图标.html`，按提示下载 `icon.ico` 到当前文件夹
-2. 双击 `一键打包桌面版.bat`
-3. 首次打包需 5-15 分钟（Rust 编译 200+ crates），完成后产物在：
-   - `Translator.msi`（推荐分发用，约 90MB）
-   - `pake-cli` 缓存目录下的 `pake-translator.exe`（绿色单文件版）
-
-第二次起打包只要 2-3 分钟（依赖已缓存）。
-
-打包成功后，安装包（`.msi` / `.exe`）会自动复制到 `dist/` 目录（已被 `.gitignore` 忽略，不入库）；需要释放磁盘空间时双击 `clean.bat` 即可清理 `dist/`、`.chrome-profile`、`build-log.txt` 等产物。
-
-### 配置 API
-
-任意 OpenAI 兼容协议的服务都可以接入，包括但不限于：
-
-| 服务 | API Base | 备注 |
-| --- | --- | --- |
-| OpenAI | `https://api.openai.com/v1` | 国内需代理 |
-| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | 国内需代理 |
-| DeepSeek | `https://api.deepseek.com/v1` | 国内可直连，便宜 |
-| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 国内可直连 |
-| 移动云 MaaS（MiniMax） | `https://zhenze-huhehaote.cmecloud.cn/v1` | 国内可直连 |
-| OpenRouter | `https://openrouter.ai/api/v1` | 海外聚合 |
-
-每套配置包含：**配置名称、接口地址、API Key、默认模型、Temperature、Max Tokens、字符上限（英/西/葡 + 中文）、请求超时、失败重试次数、是否使用流式输出、代理**。可以保存任意多套并一键切换，字符上限、超时、重试都是**跟着配置走**的。
-
-`maxTokens` 默认 4000，遇到模型截断 JSON 可调大。`temperature` 默认 0.7，对追求稳定的场景可降至 0.3。
-
-三个便捷按钮：
-
-- **获取模型列表** —— 点模型输入框右上角，会调 `GET /models` 把可选模型填进下拉，点输入框即可挑。部分服务不提供该接口。
-- **🔌 测试连接** —— 先试 `/models`（不耗 token），接口不支持时自动回退一次 1-token 对话，并显示响应延迟。
-- **👁 显示 Key** —— 切换 API Key 的明文 / 密文，方便核对自己有没有填错。
-
-#### 请求超时 / 取消 / 自动重试
-
-| 机制 | 说明 |
-| --- | --- |
-| **请求超时（秒）** | 默认 **120**。按「**多久没收到数据**」计算，**每收到一段内容就重新计时**——所以流式长任务不会被误杀，只有连接真的卡死（代理掉线、网关无响应）才会中止并提示。填 `0` 表示不限制 |
-| **失败重试次数** | 默认 **2**。仅在 **429 限流 / 5xx 服务端错误 / 网络中断** 时自动重试，采用指数退避（1s → 2s → 4s，上限 8s，带随机抖动），若响应头带 `Retry-After` 则优先遵守。**4xx（Key 错、模型不存在）不重试**，直接报错 |
-| **✕ 取消按钮** | 生成过程中出现在「🚀 生成四语标题」旁边。点一下立刻中止所有在途请求（包括正在等待的重试退避），**已生成的部分结果会保留在页面上**，也不会写入历史记录 |
-
-> 重试只发生在「一个字都还没收到」的阶段。如果流已经吐出部分内容后中断，会直接提示「连接中断（已收到部分内容，未重试）」——因为整段重来会导致内容重复。
-
-### 代理设置
-
-网页版和桌面版走代理的方式不同，但配置项是同一套（每套配置可独立开关）：
-
-| 场景 | 做法 |
-| --- | --- |
-| **桌面版（推荐）** | 默认就跟随 **Windows 系统代理**（Clash / V2Ray 开启系统代理或 TUN 模式即可，无需额外设置）。想固定代理：把地址写进 `proxy.txt`，重新打包时会自动传给 Pake 的 `--proxy-url` |
-| **网页版** | 把代理地址写进工具目录下的 `proxy.txt`（单行，如 `http://127.0.0.1:7890` 或 `socks5://127.0.0.1:1080`），`启动翻译工具.bat` 会自动加 `--proxy-server`。App 里「使用代理 → 本机/系统代理」下方的「⬇️ 下载 proxy.txt」可以直接导出一份 |
-| **有中转服务** | 配置里把代理模式选成「HTTP 中转（请求前缀）」，请求会发往 `代理地址 + 接口地址`。适合 one-api 网关、cors 代理等；本机 Clash 这类正向代理**不适用** |
-
-> 浏览器页面没法给单个请求指定代理，所以网页版的正向代理只能通过启动器的 `--proxy-server` 生效——**改完 `proxy.txt` 要重启启动器**。
-
-### 配置导出 / 导入
-
-配置面板右下角的 **📤 导出 / 📥 导入** 用于备份与换机迁移（清浏览器缓存、换电脑、分发给同事）。
-
-- **导出**：把全部配置打包成一个 JSON 文件下载，文件名形如 `translator-config-20260916-1617.json`，内含配置名称、接口地址、API Key、模型、Temperature、Max Tokens、字符上限、请求超时、重试次数、流式开关、代理设置、压缩范围，以及**你自己改过的全局 Prompt**（如果没改过就只存一份「默认」标记，导入时不会覆盖对方的 Prompt）。
-- **导入**：选中文件后会先读出「有几套、叫什么」，再让你选：
-  - **合并导入** —— 追加到现有配置后面，重名自动加序号（`DeepSeek` → `DeepSeek 2`），当前选中的配置不变；
-  - **覆盖导入** —— 清空现有全部配置后再导入，并自动选中导出时正在用的那套。
-- **全局 Prompt**：文件里带 Prompt 时，对话框会多出一个可选项「同时导入文件里的全局 Prompt」（默认**不勾**，旁边显示 Prompt 开头预览）。勾了才会覆盖，导入后仍可在「全局 Prompt」面板里编辑或点「恢复默认」还原。
-- 兼容多种格式：本工具导出的文件、`{ "profiles": [...] }`、配置数组、甚至单套配置对象都能识别；不是 JSON 或找不到配置会明确报错，不会静默失败。
-
-> ⚠️ **导出的文件里 API Key 是明文的**，请自己保管好，不要上传网盘或发群里。`translator-config-*.json` 已加进 `.gitignore`，避免误提交。
-
-## 🧮 利润计算器公式
-
-```
-净收益价（USD） = (采购价 + 其他费用) ÷ (1 - 净收益利润率) ÷ 汇率
-真实利润（CNY） = 净收益价 × 汇率 - (采购价 + 其他费用)
+```text
+启动翻译工具(兼容模式).bat
 ```
 
-固定参数（利润率、汇率、其他费用）保存在 localStorage，跨页面/跨会话保留。
+兼容模式会使用独立 Chrome Profile，并通过 `--disable-web-security` 放宽浏览器同源限制，仅用于兼容不支持 CORS 的接口。
 
-## 📦 数据存储
+> 兼容模式存在更高安全风险。不要在该 Chrome 实例中浏览其它网站，也不要把它作为日常浏览器使用。
 
-所有数据均存在浏览器 `localStorage`，**不会上传任何服务器**。Key 列表：
+### 方式三：桌面版
+
+桌面版推荐用于团队内部长期使用。
+
+前置依赖：
+
+1. Node.js LTS
+2. Rust 工具链
+3. Visual Studio Build Tools 2022
+4. Windows SDK
+
+打包步骤：
+
+```text
+1. 双击 生成图标.html 生成 icon.ico
+2. 双击 一键打包桌面版.bat
+3. 构建产物自动复制到 dist/
+```
+
+清理构建缓存可执行：
+
+```text
+clean.bat
+```
+
+## API 配置
+
+支持任意兼容 OpenAI Chat Completions 风格的服务。
+
+| 服务 | API Base |
+| --- | --- |
+| OpenAI | `https://api.openai.com/v1` |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` |
+| DeepSeek | `https://api.deepseek.com/v1` |
+| 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| OpenRouter | `https://openrouter.ai/api/v1` |
+| 移动云 MaaS | `https://zhenze-huhehaote.cmecloud.cn/v1` |
+
+每套 Profile 独立保存：
+
+```text
+name
+base
+key
+model
+temperature
+maxTokens
+stream
+charLimit
+charLimitCN
+timeout
+retry
+proxy
+```
+
+### Provider Adapter
+
+请求体不会再直接散落在页面逻辑中，而是统一通过：
+
+```text
+src/api/provider-adapters.js
+```
+
+处理模型差异。
+
+目前会自动区分：
+
+```text
+OpenAI
+OpenRouter
+Gemini OpenAI-compatible
+DeepSeek
+Qwen
+generic OpenAI-compatible
+```
+
+对于部分 reasoning / 新一代模型，例如 `o1/o3/o4`、`gpt-5*`、`gpt-6*`，Adapter 会优先使用：
+
+```json
+{
+  "max_completion_tokens": 4000
+}
+```
+
+常规模型继续使用：
+
+```json
+{
+  "max_tokens": 4000,
+  "temperature": 0.7
+}
+```
+
+这样模型兼容逻辑不会污染主翻译流程。
+
+## 请求稳定性
+
+### 空闲超时
+
+默认 120 秒。
+
+超时计算的是：
+
+> 多久没有收到任何新数据
+
+而不是整个请求总时长。每收到响应头或 SSE 数据块都会重新计时，因此正常的长流式请求不会被误杀。
+
+### 自动重试
+
+仅重试：
+
+- HTTP 429
+- HTTP 5xx
+- 网络中断
+
+采用指数退避：
+
+```text
+1s → 2s → 4s → ...
+```
+
+最多约 8 秒基础等待，并带随机抖动；如果响应包含 `Retry-After`，优先遵守服务端要求。
+
+以下情况不会自动重试：
+
+- 普通 4xx
+- 用户主动取消
+- 空闲超时
+- 已经收到部分模型输出后的连接中断
+
+### SSE
+
+流式解析支持：
+
+- CRLF / LF
+- 多行 `data:`
+- `[DONE]`
+- 末尾没有额外空行的 event
+- `choices[0].delta.content`
+- 部分兼容接口的 `choices[0].text`
+
+## 翻译流程
+
+主翻译会拆成两路：
+
+```text
+Route A: EN + ZH
+Route B: ES + PT
+```
+
+两路使用 `Promise.allSettled` 并发执行。
+
+结果规则：
+
+```text
+4/4 成功
+→ 渲染
+→ 字符校验
+→ 可选压缩
+→ 写历史
+
+部分成功
+→ 保留成功结果
+→ 提示错误
+→ 不压缩
+→ 不写历史
+
+全部失败
+→ 显示错误
+```
+
+## 字符规则
+
+英语 / 西班牙语 / 葡萄牙语：
+
+```text
+String.length
+```
+
+包含空格和标点。
+
+中文：
+
+```text
+汉字 / 中文标点 / 全角字符 = 2
+其它字符 = 1
+```
+
+默认：
+
+```text
+EN / ES / PT = 55
+CN = 60
+```
+
+## 压缩复检
+
+非快速模式下，超限语种会进入确认流程。
+
+压缩规则包括：
+
+- 必须保留核心类目词、材质词和功能词。
+- 禁止用隐含表达代替被删除的核心信息。
+- 禁止截断单词。
+- 优先删除无意义形容词、冗余数量单位和重复表达。
+- 最多压缩 2 轮。
+
+## 配置导入 / 导出
+
+配置文件包含：
+
+- Profile 列表
+- 当前 Profile
+- 字符限制
+- 请求参数
+- 代理配置
+- 压缩范围
+- 用户自定义全局 Prompt（如果存在）
+
+> 导出的 JSON 中 API Key 为明文，请自行妥善保存。
+
+翻译历史不会包含在配置备份中。
+
+## 本地数据
+
+主要 localStorage Key：
 
 | Key | 用途 |
 | --- | --- |
-| `translator_profiles_v1` | 所有 API 配置（含各自的字符上限、代理、流式开关）+ 压缩范围 |
+| `translator_profiles_v1` | API Profiles + schema + 压缩范围 |
 | `translator_global_prompt_v1` | 全局 Prompt |
 | `translator_history_v1` | 翻译历史 |
-| `translator_calc_params_v1` | 计算器固定参数 |
-| `translator_fast_mode` | 快速模式开关 |
-| `translator_calc_floating_state` | 计算器最小化状态 |
+| `translator_calc_params_v1` | 利润计算器参数 |
+| `translator_fast_mode` | 快速模式 |
+| `translator_calc_floating_state` | 计算器折叠状态 |
 
-桌面版（WebView2）的数据目录在 `%APPDATA%\Translator\EBWebView\`（目录名由打包时的 `--name` 决定），与浏览器版不互通。重新打包 .msi 升级安装不会丢数据（前提是 `--name` 与打包时的 identifier 都没变）。
+修改这些 Key 时必须提供迁移逻辑，否则会造成老用户数据丢失。
 
-## 🗂️ 项目结构
+## 项目结构
 
-```
+```text
 .
-├── index.html                  # 主应用（单文件，含全部 UI + 逻辑）
-├── icon.svg                    # 应用图标设计源（SVG）
-├── 生成图标.html               # 用浏览器从 SVG 生成 icon.png / icon.ico
-├── 启动翻译工具.bat            # 启动带 --disable-web-security 的独立 Chrome
-├── 启动翻译工具(静默).vbs      # 后台启动 启动翻译工具.bat（无黑窗口）
-├── clean.bat                  # 清理构建产物/运行时缓存（不入库）
-├── 一键打包桌面版.bat          # 用 Pake 打包成 .msi（产物复制到 dist/）
-├── proxy.txt                  # 【可选，自己建】本机代理地址，会被启动器/打包脚本读取（不入库）
-├── translator-config-*.json   # 【可选，导出生成】API 配置备份，含明文 Key（不入库）
-├── README.md                   # 本文件
-├── AGENTS.md                   # 给 AI 协作者的指导
-├── LICENSE                     # MIT
-└── .gitignore
+├── index.html
+├── tailwind.min.css
+│
+├── src/
+│   ├── core/
+│   │   └── config.js
+│   │
+│   ├── api/
+│   │   ├── provider-adapters.js
+│   │   └── client.js
+│   │
+│   ├── translation.js
+│   └── app.js
+│
+├── tools/
+│   ├── tailwind-input.css
+│   ├── validate_app.py
+│   ├── refactor_modular.py
+│   └── refine_modules.py
+│
+├── docs/
+│   └── ARCHITECTURE.md
+│
+├── .github/workflows/
+│   └── verify.yml
+│
+├── 启动翻译工具.bat
+├── 启动翻译工具(兼容模式).bat
+├── 启动翻译工具(静默).vbs
+├── 一键打包桌面版.bat
+├── clean.bat
+├── 生成图标.html
+├── icon.svg
+├── AGENTS.md
+└── README.md
 ```
 
-## 🛠️ 二次开发
+### 模块职责
 
-整个应用是 **单文件 HTML**，所有逻辑都在 `index.html` 一个文件里。直接编辑保存即可，无构建步骤。CSS 走 Tailwind CDN，没有任何 npm 依赖。
+| 文件 | 职责 |
+| --- | --- |
+| `index.html` | HTML/UI 骨架和脚本加载顺序 |
+| `src/core/config.js` | 默认 Prompt、Profile 数据模型、schema、配置存储和迁移 |
+| `src/api/provider-adapters.js` | Provider / model 参数兼容 |
+| `src/api/client.js` | HTTP、代理、超时、重试、取消、SSE、`callAI` |
+| `src/translation.js` | 字符计数、Prompt 预处理、多语路由等翻译领域逻辑 |
+| `src/app.js` | UI、事件、翻译主流程、历史、压缩交互和页面编排 |
 
-修改后想看效果：
+没有继续把 Toast、History、Calculator 等拆成独立文件，这是刻意保持的中等粒度架构，避免过度模块化。
 
-- **浏览器版**：刷新页面（Ctrl+R）
-- **桌面版**：重新跑 `一键打包桌面版.bat`，安装新 .msi 即可（数据保留）
+详细设计见：
 
-详细架构、关键函数、本地存储约定见 [AGENTS.md](./AGENTS.md)。
+```text
+docs/ARCHITECTURE.md
+```
 
-## 🤔 常见问题
+## Tailwind CSS
 
-**Q：调用 API 报 "Failed to fetch"？**
-A：请求跨域被拦了。务必通过 `启动翻译工具.bat` 启动（带 `--disable-web-security`），不要直接在普通 Chrome 中双击 index.html。桌面版（WebView2）由系统网络栈发起请求，主流大模型接口可直接用；但个别站点（如 Google 免费翻译端点）仍可能因跨域受限，遇到 Failed to fetch 时换个网络/代理再试。
+运行时不再加载 `cdn.tailwindcss.com`。
 
-**Q：AI 返回的 JSON 解析失败？**
-A：通常是模型输出被截断。调大 API 配置里的 `maxTokens`（建议 4000+），或降低 `temperature`。
+仓库使用本地：
 
-**Q：字符数严格超限怎么办？**
-A：超限会触发自动压缩复检（最多 2 轮），并在 UI 上弹出确认提示。如果仍然超限，可以手动微调原标题或全局 Prompt。
+```text
+tailwind.min.css
+```
 
-**Q：能用国内大模型吗？**
-A：能。任何 OpenAI 兼容协议的国内服务（DeepSeek、通义千问、Kimi、智谱、MiniMax 等）都可以接入。
+重新生成命令：
 
-**Q：桌面版会用系统代理吗？**
-A：会，WebView2 默认跟随 Windows 系统代理。Clash / V2Ray 开启系统代理或 TUN 模式后自动生效，不用做任何配置。
+```bash
+npx --yes tailwindcss@3.4.17 \
+  -i ./tools/tailwind-input.css \
+  -o ./tailwind.min.css \
+  --content './index.html' './src/**/*.js' \
+  --minify
+```
 
-**Q：网页版怎么走代理？**
-A：在工具目录建一个 `proxy.txt`，写一行代理地址（如 `http://127.0.0.1:7890` 或 `socks5://127.0.0.1:1080`），然后重启 `启动翻译工具.bat`。也可以在配置面板点「⬇️ 下载 proxy.txt」直接导出。注意：Clash 这类**正向代理**只能这样用，直接填在配置面板的「代理地址」里是不生效的。
+如果 JS 模板中增加新的 Tailwind class，需要重新生成 CSS。
 
-**Q：翻译时一直转圈、没有任何输出？**
-A：个别中转网关不支持 SSE 流式。到 API 配置里把「使用流式输出」取消勾选再试。
+## 验证
 
-**Q：换电脑 / 清了浏览器缓存，配置全没了？**
-A：配置只存在本机 localStorage，所以先前的 **📤 导出** 就是为此准备的。到「API 配置」右下角导出成 JSON，拷到新电脑后用 **📥 导入 → 合并导入** 还原即可。养成改动配置后随手导出一次的习惯最省事。
+仓库带 GitHub Actions 静态验证。
 
-**Q：导入时选「合并」还是「覆盖」？**
-A：想保留原有配置就选合并（重名会自动加序号）；想把新电脑上的配置完全替换成文件里的这套就选覆盖——覆盖会清空现有全部配置，注意别选错。全局 Prompt 只在你额外勾选时才会覆盖，翻译历史不会被动。
+主要检查：
 
-**Q：生成时一直转圈，怎么停下来？**
-A：点「🚀 生成四语标题」旁边的 **✕ 取消**，会立刻中止所有在途请求，已经生成好的语种卡片会保留在页面上（不会写入历史）。如果不想手动点，也可以把「请求超时」设小一点（比如 60）——连接持续没数据就会自动中止并提示。
+- 所有 JS 文件 `node --check`
+- 本地 Tailwind CSS 存在
+- 运行时没有 Tailwind CDN
+- 默认启动器没有 `--disable-web-security`
+- 兼容模式明确保留该参数
+- SSE parser 仍存在
+- partial-result guard 仍存在
+- history 不写入不完整结果
+- 模块加载顺序正确
 
-**Q：报「API 错误 429 / 503」，要不要手动重试？**
-A：不用，工具会自动按 1s → 2s → 4s 退避重试（默认 2 次），界面上会显示「重试 1/2 · 接口限流 429」。想改次数就到配置里调「失败重试次数」。如果一直 429，说明额度真的用完了。
+开发后建议至少执行：
 
-## 📄 License
+```bash
+node --check src/core/config.js
+node --check src/api/provider-adapters.js
+node --check src/api/client.js
+node --check src/translation.js
+node --check src/app.js
+python tools/validate_app.py
+```
 
-[MIT](./LICENSE)
+## 开发原则
+
+1. 保持浏览器直接运行能力，不依赖开发服务器。
+2. 不随意引入 bundler / framework。
+3. 网络行为统一放在 `src/api/client.js`。
+4. 模型参数差异统一放在 `provider-adapters.js`。
+5. 翻译纯逻辑优先放 `translation.js`。
+6. UI 和页面编排留在 `app.js`。
+7. localStorage Key 不可无迁移直接修改。
+8. 不把双路并发重新合回单请求。
+9. 不允许 partial result 被当作完整结果写入历史。
+10. 不重新引入运行时第三方 CDN 脚本。
+
+## License
+
+MIT License。
