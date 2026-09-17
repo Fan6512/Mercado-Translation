@@ -1,3 +1,4 @@
+# Medium-granularity module refinement: keep responsibilities clear without over-splitting.
 from pathlib import Path
 import re
 
