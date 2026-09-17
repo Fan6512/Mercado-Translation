@@ -1,5 +1,8 @@
 @echo off
 setlocal
+REM ---- 切到 UTF-8 代码页 ----
+REM 本脚本与 pake 的输出都是 UTF-8；不切的话中文路径写进 build-log.txt 全是乱码，排障困难
+chcp 65001 >nul
 REM ============================================================
 REM Build desktop app with Pake (no Chrome required)
 REM This version logs everything to build-log.txt
@@ -79,7 +82,10 @@ if defined PROXY_URL echo Proxy  : %PROXY_URL%
 echo.
 
 REM Pass the local file path directly (not file:// URL) so --use-local-file properly embeds resources
-call cmd /c ""%VCVARS%" && npx -y pake-cli "%INDEX%" --name "Translator" --icon "%HERE%icon.ico" --width 1400 --height 900 --use-local-file %PAKE_PROXY%" >> "%LOG%" 2>&1
+REM --identifier 必须钉死：pake 默认用 md5(入口路径::名称) 生成 com.pake.aXXXXXX，
+REM   换目录 / 改名就变 ID，MSI 会被 Windows 当成另一个产品、无法覆盖升级。
+REM   注意：改这个值会让「已安装旧 ID 版本」的机器出现重复安装（需先卸载旧版）。
+call cmd /c ""%VCVARS%" && npx -y pake-cli "%INDEX%" --name "Translator" --identifier "com.pake.translator" --icon "%HERE%icon.ico" --width 1400 --height 900 --use-local-file %PAKE_PROXY%" >> "%LOG%" 2>&1
 
 echo. >> "%LOG%"
 echo Exit code: %ERRORLEVEL% >> "%LOG%"
@@ -96,34 +102,50 @@ echo.
 echo Files matching Translator* in your user folder:
 dir /b "%USERPROFILE%\Translator*" 2>nul
 echo.
+REM ---- 扫描 Pake 产物。真实输出路径带 target 三元组（pake 固定传 --target x86_64-pc-windows-msvc）：
+REM      <pake-cli>\src-tauri\target\x86_64-pc-windows-msvc\release\
+REM      老版本没有三元组，所以两个候选都探测一遍 ----
 echo Files in Pake build output folders (auto-scan):
 for /f "delims=" %%d in ('dir /b /s /ad "%LOCALAPPDATA%\npm-cache\_npx\*pake-cli" 2^>nul') do (
-    if exist "%%d\src-tauri\target\release\bundle\nsis\" (
-        echo NSIS installer location:
-        echo   %%d\src-tauri\target\release\bundle\nsis\
-        dir /b "%%d\src-tauri\target\release\bundle\nsis\"
-    )
-    if exist "%%d\src-tauri\target\release\bundle\msi\" (
-        echo MSI installer location:
-        echo   %%d\src-tauri\target\release\bundle\msi\
-        dir /b "%%d\src-tauri\target\release\bundle\msi\"
+    for %%r in ("%%d\src-tauri\target\release" "%%d\src-tauri\target\x86_64-pc-windows-msvc\release") do (
+        if exist "%%~fr\bundle\nsis\" (
+            echo NSIS installer location:
+            echo   %%~fr\bundle\nsis\
+            dir /b "%%~fr\bundle\nsis\"
+        )
+        if exist "%%~fr\bundle\msi\" (
+            echo MSI installer location:
+            echo   %%~fr\bundle\msi\
+            dir /b "%%~fr\bundle\msi\"
+        )
     )
 )
 echo.
 
 REM ---- 复制构建产物到 dist/（已被 .gitignore 忽略，不入库）----
+REM 注意：pake 打包完成会把 .msi 直接搬到当前目录（%HERE%Translator.msi），
+REM       所以先复制根目录的 msi，再从构建目录兜底找 nsis 安装包与绿色 exe
 if not exist "%HERE%dist" mkdir "%HERE%dist"
 set "INSTALLER_COPIED=0"
-for /f "delims=" %%d in ('dir /b /s /ad "%LOCALAPPDATA%\npm-cache\_npx\*pake-cli" 2^>nul') do (
-    if exist "%%d\src-tauri\target\release\bundle\msi\*.msi" (
-        copy /y "%%d\src-tauri\target\release\bundle\msi\*.msi" "%HERE%dist\" >nul
+for %%m in ("%HERE%Translator*.msi") do (
+    if exist "%%~fm" (
+        copy /y "%%~fm" "%HERE%dist\" >nul
         set "INSTALLER_COPIED=1"
     )
-    if exist "%%d\src-tauri\target\release\bundle\nsis\*.exe" (
-        copy /y "%%d\src-tauri\target\release\bundle\nsis\*.exe" "%HERE%dist\" >nul
-    )
-    if exist "%%d\src-tauri\target\release\pake-translator.exe" (
-        copy /y "%%d\src-tauri\target\release\pake-translator.exe" "%HERE%dist\" >nul
+)
+for /f "delims=" %%d in ('dir /b /s /ad "%LOCALAPPDATA%\npm-cache\_npx\*pake-cli" 2^>nul') do (
+    for %%r in ("%%d\src-tauri\target\release" "%%d\src-tauri\target\x86_64-pc-windows-msvc\release") do (
+        if exist "%%~fr\bundle\nsis\*.exe" (
+            copy /y "%%~fr\bundle\nsis\*.exe" "%HERE%dist\" >nul
+            set "INSTALLER_COPIED=1"
+        )
+        if exist "%%~fr\bundle\msi\*.msi" (
+            copy /y "%%~fr\bundle\msi\*.msi" "%HERE%dist\" >nul
+            set "INSTALLER_COPIED=1"
+        )
+        if exist "%%~fr\pake-translator.exe" (
+            copy /y "%%~fr\pake-translator.exe" "%HERE%dist\" >nul
+        )
     )
 )
 if "%INSTALLER_COPIED%"=="1" (

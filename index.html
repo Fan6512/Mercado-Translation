@@ -1105,7 +1105,8 @@ function stripCodeFence(text) {
 
 // ===== 用户确认压缩 =====
 const LANG_LABEL = { en: '英语', es: '西语', pt: '葡语', zh: '中文' };
-function askUserShorten(overLangs, round) {
+// round: 已压缩轮次；signal: 本次运行的取消信号（点「✕ 取消」时立即以 false 收尾，避免流程卡在对话框上）
+function askUserShorten(overLangs, round, signal) {
   return new Promise((resolve) => {
     const box = document.getElementById('shortenPrompt');
     const detail = overLangs.map(it =>
@@ -1127,8 +1128,23 @@ function askUserShorten(overLangs, round) {
     `;
     box.classList.remove('hidden');
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    document.getElementById('btnAcceptShorten').onclick = () => resolve(true);
-    document.getElementById('btnRejectShorten').onclick = () => resolve(false);
+
+    // 只允许结算一次：「取消」与「点按钮」两条路径都可能触发
+    let settled = false;
+    const finish = (val) => {
+      if (settled) return;
+      settled = true;
+      if (signal) signal.removeEventListener('abort', onAbort);
+      resolve(val);
+    };
+    const onAbort = () => finish(false);
+
+    if (signal) {
+      if (signal.aborted) { finish(false); return; }
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+    document.getElementById('btnAcceptShorten').onclick = () => finish(true);
+    document.getElementById('btnRejectShorten').onclick = () => finish(false);
   });
 }
 function hideShortenPrompt() {
@@ -1151,11 +1167,12 @@ function listOverLimit(result, charLimit, charLimitCN, scope) {
 // 压缩轮次硬上限：超过就停手交还用户，避免无限循环
 const MAX_SHORTEN_ROUNDS = 2;
 // 返回 { merged, ok }：ok=false 表示压缩请求失败/未产生改动，调用方应保留原结果并提示
-async function shortenOverLimit(result, charLimit, charLimitCN, scope, onProgress, opts = {}) {
+// opts 是第 5 个参数：{ signal, onRetry, onProgress }
+async function shortenOverLimit(result, charLimit, charLimitCN, scope, opts = {}) {
   const overItems = listOverLimit(result, charLimit, charLimitCN, scope);
   if (!overItems.length) return { merged: result, ok: true };
 
-  if (onProgress) onProgress(`检测到 ${overItems.length} 条超限，正在压缩重写...`);
+  if (typeof opts.onProgress === 'function') opts.onProgress(`检测到 ${overItems.length} 条超限，正在压缩重写...`);
 
   const langName = { en: '英语', es: '西语', pt: '葡语', zh: '中文' };
   const taskList = overItems.map(it =>
@@ -1367,7 +1384,7 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
           showToast(`已压缩 ${round} 轮仍有 ${overLangs.length} 条超限，请手动微调`, 'info', 3500);
           break;
         }
-        const accept = await askUserShorten(overLangs, round);
+        const accept = await askUserShorten(overLangs, round, run.signal);
         hideShortenPrompt();
         if (!accept || isRunCancelled(run)) break;
         round++;
@@ -1419,6 +1436,31 @@ const LANG_META = {
   zh: { name: '中文', flag: '🇨🇳', desc: '淘宝 / 拼多多 / 虾皮台湾', isCN: true },
 };
 
+// 复制到剪贴板：异步 API 在 WebView2 / 非安全上下文下可能被拒绝，
+// 失败时回退到 execCommand；两者都失败返回 false（调用方必须给出明确提示，不能假装成功）
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* 落到下面的兜底方案 */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-1000px;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 function renderOutput(result, input, charLimit, charLimitCN) {
   const out = document.getElementById('outputArea');
   out.innerHTML = '';
@@ -1455,9 +1497,9 @@ function renderOutput(result, input, charLimit, charLimitCN) {
     `;
     card.querySelector('.font-mono').textContent = title;
     if (analysis) card.querySelector('details div').textContent = analysis;
-    card.querySelector('button').addEventListener('click', () => {
-      navigator.clipboard.writeText(title);
-      flash(`${meta.name} 已复制`);
+    card.querySelector('button').addEventListener('click', async () => {
+      if (await copyText(title)) flash(`${meta.name} 已复制`);
+      else showError('复制失败，请手动选中文本复制');
     });
     out.appendChild(card);
   }
@@ -1487,7 +1529,7 @@ function renderHistory() {
     const preview = (h.input || '').slice(0, 60);
     return `<div class="border border-slate-200 rounded-lg p-3 hover:bg-slate-50 cursor-pointer" data-i="${i}">
       <div class="text-xs text-slate-400 mb-1">${t}</div>
-      <div class="text-sm text-slate-700 truncate">${preview}</div>
+      <div class="text-sm text-slate-700 truncate">${escapeHtml(preview)}</div>
     </div>`;
   }).join('');
   list.querySelectorAll('[data-i]').forEach(el => {
@@ -1841,7 +1883,7 @@ document.getElementById('btnGTTranslate').addEventListener('click', async () => 
     hint.textContent = `✓ 完成 (${((Date.now() - t0) / 1000).toFixed(1)}s)`;
     setTimeout(() => hint.textContent = '', 2500);
   } catch (e) {
-    hint.textContent = '✗ ' + e.message + '（如遇 CORS 错误，请用启动器打开）';
+    hint.textContent = '✗ ' + e.message + '（若为 Failed to fetch，多为跨域被拦：检查网络/代理，或改用启动器版 Chrome）';
   }
 });
 

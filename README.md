@@ -1,10 +1,10 @@
 # 跨境电商多语种标题翻译工具
 
-> 单文件 HTML 应用，团队内部使用。AI 驱动的跨境电商商品标题"中/英 → 英/西/葡/繁中"四语翻译，自带字符限制控制、SEO 关键词优化、Google Translate 预检、跨境利润计算器，可一键打包成 Windows 桌面应用。
+> 单文件 HTML 应用，团队内部使用。AI 驱动的跨境电商商品标题翻译（输入中/英，输出英/西/葡/中四语），自带字符限制控制、SEO 关键词优化、Google Translate 预检、跨境利润计算器，可一键打包成 Windows 桌面应用。
 
 ## ✨ 功能特性
 
-- **四语同时输出**：English（全球/北美） / Español（中性拉美西语） / Português（巴西本土） / 繁体中文（淘宝/拼多多/Shopee TW 风格）
+- **四语同时输出**：English（全球/北美） / Español（中性拉美西语） / Português（巴西本土） / 中文（淘宝/拼多多/虾皮台湾风格）
 - **严格字符限制**：默认 EN/ES/PT 上限 55，CN 上限 60（汉字按 2 计算），可自定义
 - **SEO 关键词优化**：每个语种生成高搜索量关键词，并提供流量解析说明（西语/葡语）
 - **自动压缩复检**：超限标题自动调用 AI 重新压缩，禁止暗示/截断/同义替换核心词
@@ -14,7 +14,7 @@
 - **跨境利润计算器**：浮动侧栏，输入采购价实时计算 USD 净收益价 + 真实利润，固定参数（利润率、汇率、其他费用）持久化
 - **可注释的 Prompt**：以 `//`、`#!`、`#！` 开头的行会在调用 AI 前自动剥离，便于灵活管理 Prompt
 - **历史记录**：所有翻译结果本地保存，可一键复用
-- **桌面应用**：可用 Pake 打包成独立 .msi 安装包（5-10MB，不依赖 Chrome）
+- **桌面应用**：可用 Pake 打包成独立 .msi 安装包（约 90MB，内置 WebView2 运行时，不依赖用户安装 Chrome）
 
 ## 🚀 快速开始
 
@@ -46,7 +46,7 @@
 1. 双击 `生成图标.html`，按提示下载 `icon.ico` 到当前文件夹
 2. 双击 `一键打包桌面版.bat`
 3. 首次打包需 5-15 分钟（Rust 编译 200+ crates），完成后产物在：
-   - `Translator.msi`（推荐分发用，约 5-10MB）
+   - `Translator.msi`（推荐分发用，约 90MB）
    - `pake-cli` 缓存目录下的 `pake-translator.exe`（绿色单文件版）
 
 第二次起打包只要 2-3 分钟（依赖已缓存）。
@@ -63,7 +63,7 @@
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | 国内需代理 |
 | DeepSeek | `https://api.deepseek.com/v1` | 国内可直连，便宜 |
 | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 国内可直连 |
-| 移动云 MaaS（MiniMax） | `https://api-maas.mobilecloud.com/v1` | 国内可直连 |
+| 移动云 MaaS（MiniMax） | `https://zhenze-huhehaote.cmecloud.cn/v1` | 国内可直连 |
 | OpenRouter | `https://openrouter.ai/api/v1` | 海外聚合 |
 
 每套配置包含：**配置名称、接口地址、API Key、默认模型、Temperature、Max Tokens、字符上限（英/西/葡 + 中文）、请求超时、失败重试次数、是否使用流式输出、代理**。可以保存任意多套并一键切换，字符上限、超时、重试都是**跟着配置走**的。
@@ -133,7 +133,7 @@
 | `translator_fast_mode` | 快速模式开关 |
 | `translator_calc_floating_state` | 计算器最小化状态 |
 
-桌面版（WebView2）的数据目录在 `%LOCALAPPDATA%\com.pake.translator\`，与浏览器版不互通。重新打包 .msi 升级安装不会丢数据。
+桌面版（WebView2）的数据目录在 `%APPDATA%\Translator\EBWebView\`（目录名由打包时的 `--name` 决定），与浏览器版不互通。重新打包 .msi 升级安装不会丢数据（前提是 `--name` 与打包时的 identifier 都没变）。
 
 ## 🗂️ 项目结构
 
@@ -168,7 +168,7 @@
 ## 🤔 常见问题
 
 **Q：调用 API 报 "Failed to fetch"？**
-A：浏览器跨域被拦了。务必通过 `启动翻译工具.bat` 启动（带 `--disable-web-security`），不要直接在普通 Chrome 中双击 index.html。桌面版（WebView2）无此问题。
+A：请求跨域被拦了。务必通过 `启动翻译工具.bat` 启动（带 `--disable-web-security`），不要直接在普通 Chrome 中双击 index.html。桌面版（WebView2）由系统网络栈发起请求，主流大模型接口可直接用；但个别站点（如 Google 免费翻译端点）仍可能因跨域受限，遇到 Failed to fetch 时换个网络/代理再试。
 
 **Q：AI 返回的 JSON 解析失败？**
 A：通常是模型输出被截断。调大 API 配置里的 `maxTokens`（建议 4000+），或降低 `temperature`。
