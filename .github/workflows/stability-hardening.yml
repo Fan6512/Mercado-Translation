@@ -1,0 +1,64 @@
+name: Apply stability hardening
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - review/security-stability-v1
+    paths:
+      - '.github/workflows/stability-hardening.yml'
+      - 'tools/apply_stability_patch.py'
+      - 'tools/tailwind-input.css'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: review/security-stability-v1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply targeted stability patch
+        run: python tools/apply_stability_patch.py
+
+      - name: Build local Tailwind CSS
+        run: npx --yes tailwindcss@3.4.17 -i ./tools/tailwind-input.css -o ./tailwind.min.css --content ./index.html --minify
+
+      - name: Verify runtime CDN removed and key patches present
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s = Path('index.html').read_text(encoding='utf-8')
+          checks = {
+              'tailwind CDN removed': 'cdn.tailwindcss.com' not in s,
+              'local css linked': './tailwind.min.css' in s,
+              'SSE event parser present': 'consumeEvent' in s,
+              'partial result early return present': '部分语种生成失败，已保留成功结果' in s,
+              'history completeness guard present': '跳过不完整结果' in s,
+          }
+          failed = [k for k, ok in checks.items() if not ok]
+          for k, ok in checks.items(): print(('OK ' if ok else 'FAIL ') + k)
+          if failed: raise SystemExit('verification failed: ' + ', '.join(failed))
+          PY
+
+      - name: Commit generated hardening changes
+        run: |
+          if git diff --quiet -- index.html tailwind.min.css; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html tailwind.min.css
+          git commit -m 'fix: harden SSE partial results and localize Tailwind [skip ci]'
+          git push origin HEAD:review/security-stability-v1
