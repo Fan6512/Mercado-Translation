@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 
 # Permanent CI guard for the security baseline and the final five-module structure.
+# Keep this validator as the long-lived merge gate after one-shot migration tooling is removed.
 root = Path(__file__).resolve().parents[1]
 index = (root / "index.html").read_text(encoding="utf-8")
 launcher = (root / "启动翻译工具.bat").read_text(encoding="utf-8")
