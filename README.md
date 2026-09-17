@@ -4,6 +4,12 @@ AI 驱动的跨境电商商品标题翻译工具。输入中文或英文标题�
 
 项目采用轻量化前端架构：无需 Node 运行时、无需 Web 服务器、无需打包器即可使用；HTML、CSS 与 JavaScript 已按职责拆分，仍保持 Windows 本地直接运行和 Pake 桌面打包能力。
 
+## 文档
+
+- `README.md`：使用方法、配置方式、功能说明、项目结构和基础开发约定。
+- `AGENTS.md`：给 AI 助手和维护者的代码修改规则、关键不变量和文件归属约定。
+- `docs/ARCHITECTURE.md`：长期架构边界、模块职责、数据流、请求模型和演进原则。
+
 ## 功能特性
 
 - **四语输出**：English / Español（拉美） / Português（巴西） / 中文。
@@ -337,12 +343,6 @@ CN = 60
 | `src/app.js` | UI、事件、翻译主流程、历史、压缩交互和页面编排 |
 
 没有继续把 Toast、History、Calculator 等拆成独立文件，这是刻意保持的中等粒度架构，避免过度模块化。
-
-详细设计见：
-
-```text
-docs/ARCHITECTURE.md
-```
 
 ## Tailwind CSS
 
