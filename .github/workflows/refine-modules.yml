@@ -1,0 +1,69 @@
+name: Refine modules
+
+on:
+  push:
+    branches:
+      - refactor/modular-api-adapter-v1
+    paths:
+      - 'tools/refine_modules.py'
+      - '.github/workflows/refine-modules.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply guarded module split
+        run: python tools/refine_modules.py
+
+      - name: Rebuild local Tailwind CSS
+        run: npx --yes tailwindcss@3.4.17 -i ./tools/tailwind-input.css -o ./tailwind.min.css --content './index.html' './src/**/*.js' --minify
+
+      - name: Validate module syntax and invariants
+        run: |
+          node --check src/core/config.js
+          node --check src/api/provider-adapters.js
+          node --check src/api/client.js
+          node --check src/translation.js
+          node --check src/app.js
+          python - <<'PY'
+          from pathlib import Path
+          index = Path('index.html').read_text(encoding='utf-8')
+          app = Path('src/app.js').read_text(encoding='utf-8')
+          api = Path('src/api/client.js').read_text(encoding='utf-8')
+          trans = Path('src/translation.js').read_text(encoding='utf-8')
+          core = Path('src/core/config.js').read_text(encoding='utf-8')
+          required = [
+              './src/core/config.js', './src/api/provider-adapters.js',
+              './src/api/client.js', './src/translation.js', './src/app.js'
+          ]
+          assert all(tag in index for tag in required)
+          assert 'function callAI(' in api
+          assert 'function countChars(' in trans
+          assert 'const STORE =' in core
+          assert 'document.getElementById' in app
+          assert 'cdn.tailwindcss.com' not in index
+          print('module invariants OK')
+          PY
+
+      - name: Commit refined modules
+        run: |
+          if git diff --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html src tailwind.min.css
+          git commit -m 'refactor: split config api translation and app layers [skip ci]'
+          git push origin HEAD:refactor/modular-api-adapter-v1
