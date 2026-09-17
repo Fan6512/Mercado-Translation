@@ -1,58 +1,72 @@
-# Medium-granularity module refinement: keep responsibilities clear without over-splitting.
 from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / 'src' / 'app.js'
-INDEX = ROOT / 'index.html'
-CORE = ROOT / 'src' / 'core' / 'config.js'
-API = ROOT / 'src' / 'api' / 'client.js'
-TRANS = ROOT / 'src' / 'translation.js'
+CLIENT = ROOT / 'src' / 'api' / 'client.js'
+TRANSLATION = ROOT / 'src' / 'translation.js'
 
 app = APP.read_text(encoding='utf-8')
-index = INDEX.read_text(encoding='utf-8')
+client = CLIENT.read_text(encoding='utf-8')
+translation = TRANSLATION.read_text(encoding='utf-8')
 
-# Idempotent: if the target files and script tags already exist, just validate.
-if CORE.exists() and API.exists() and TRANS.exists() and './src/core/config.js' in index and './src/api/client.js' in index and './src/translation.js' in index:
-    print('medium-granularity module split already applied')
-    raise SystemExit(0)
 
-# 1) Move configuration constants/store/model code as one contiguous block.
-marker = '// ===== 渲染配置 UI ====='
-pos = app.find(marker)
-if pos < 0:
-    raise SystemExit('config split marker not found')
-core_text = app[:pos].rstrip() + '\n'
-app = app[pos:]
-CORE.parent.mkdir(parents=True, exist_ok=True)
-CORE.write_text(core_text, encoding='utf-8')
-
-# Helpers for safely extracting top-level function declarations by name.
 def find_function_block(src: str, name: str):
     m = re.search(r'(?m)^(?:async\s+)?function\s+' + re.escape(name) + r'\s*\(', src)
     if not m:
-        raise SystemExit(f'function not found: {name}')
-    start = m.start()
-    # Find the function-body brace after the closing parameter paren. This avoids
-    # mistaking default-object params such as `({ timeoutMs = 0 } = {})` for the body.
-    body = re.search(r'\)\s*\{', src[m.end():])
-    if not body:
+        return None
+
+    # Find the function-body opening brace while respecting default object parameters.
+    i = m.end()
+    paren_depth = 1
+    state = 'code'
+    quote = ''
+    while i < len(src):
+        c = src[i]
+        n = src[i + 1] if i + 1 < len(src) else ''
+        if state == 'code':
+            if c in ('"', "'"):
+                state, quote = 'string', c
+            elif c == '`':
+                state = 'template'
+            elif c == '/' and n == '/':
+                state = 'line_comment'; i += 1
+            elif c == '/' and n == '*':
+                state = 'block_comment'; i += 1
+            elif c == '(':
+                paren_depth += 1
+            elif c == ')':
+                paren_depth -= 1
+                if paren_depth == 0:
+                    break
+        elif state == 'string':
+            if c == '\\': i += 1
+            elif c == quote: state = 'code'
+        elif state == 'template':
+            if c == '\\': i += 1
+            elif c == '`': state = 'code'
+        elif state == 'line_comment':
+            if c == '\n': state = 'code'
+        elif state == 'block_comment':
+            if c == '*' and n == '/': state = 'code'; i += 1
+        i += 1
+
+    brace = src.find('{', i + 1)
+    if brace < 0:
         raise SystemExit(f'opening brace not found: {name}')
-    brace = m.end() + body.end() - 1
 
     i = brace
     depth = 0
     state = 'code'
     quote = ''
-    template_expr_depth = 0
     while i < len(src):
         c = src[i]
         n = src[i + 1] if i + 1 < len(src) else ''
         if state == 'code':
-            if c in ('\"', "'"):
+            if c in ('"', "'"):
                 state, quote = 'string', c
             elif c == '`':
-                state, quote = 'template', c
+                state = 'template'
             elif c == '/' and n == '/':
                 state = 'line_comment'; i += 1
             elif c == '/' and n == '*':
@@ -63,69 +77,66 @@ def find_function_block(src: str, name: str):
                 depth -= 1
                 if depth == 0:
                     end = i + 1
-                    while end < len(src) and src[end] in ' \t': end += 1
-                    if end < len(src) and src[end] == ';': end += 1
-                    while end < len(src) and src[end] in '\r\n': end += 1
-                    return start, end, src[start:end].rstrip() + '\n'
+                    if end < len(src) and src[end] == '\r': end += 1
+                    if end < len(src) and src[end] == '\n': end += 1
+                    return m.start(), end, src[m.start():end]
         elif state == 'string':
-            if c == '\\':
-                i += 1
-            elif c == quote:
-                state = 'code'
+            if c == '\\': i += 1
+            elif c == quote: state = 'code'
         elif state == 'template':
-            if c == '\\':
-                i += 1
-            elif c == '`' and template_expr_depth == 0:
-                state = 'code'
-            elif c == '$' and n == '{':
-                template_expr_depth += 1; i += 1
-            elif c == '}' and template_expr_depth > 0:
-                template_expr_depth -= 1
+            if c == '\\': i += 1
+            elif c == '`': state = 'code'
         elif state == 'line_comment':
-            if c in '\r\n': state = 'code'
+            if c == '\n': state = 'code'
         elif state == 'block_comment':
             if c == '*' and n == '/': state = 'code'; i += 1
         i += 1
     raise SystemExit(f'unclosed function: {name}')
 
 
-def extract_functions(src: str, names):
-    blocks = []
-    spans = []
-    for name in names:
-        start, end, text = find_function_block(src, name)
-        spans.append((start, end, name))
-        blocks.append((name, text))
-    # Remove from back to front so positions remain valid.
-    for start, end, _ in sorted(spans, reverse=True):
-        src = src[:start] + src[end:]
-    ordered = '\n'.join(text for _, text in blocks).rstrip() + '\n'
-    return src, ordered
+# API response cleanup belongs to the API client, not the UI/orchestration layer.
+app_strip = find_function_block(app, 'stripCodeFence')
+client_strip = find_function_block(client, 'stripCodeFence')
+if app_strip:
+    start, end, block = app_strip
+    app = app[:start] + app[end:]
+    if not client_strip:
+        marker = '// opts: { temperature, maxTokens, messages, stream, signal, timeout, retry, onRetry }'
+        pos = client.find(marker)
+        if pos < 0:
+            raise SystemExit('client insertion marker not found for stripCodeFence')
+        client = client[:pos] + block.rstrip() + '\n\n' + client[pos:]
+elif not client_strip:
+    raise SystemExit('stripCodeFence missing from both app and client')
 
-# 2) Network transport/retry/SSE concerns live together.
-api_names = [
-    'applyProxyPrefix', 'buildApiUrl', 'makeRequestGate', 'normalizeFetchError',
-    'backoffDelayMs', 'sleep', 'shouldRetry', 'fetchJsonWithRetry', 'callAI',
-]
-app, api_text = extract_functions(app, api_names)
-API.write_text('// Network transport layer: URL/proxy, timeout, retry, SSE and AI calls.\n\n' + api_text, encoding='utf-8')
 
-# 3) Pure translation helpers live together; DOM orchestration stays in app.js.
-translation_names = ['countChars', 'stripPromptComments', 'buildRoutePrompt']
-app, translation_text = extract_functions(app, translation_names)
-TRANS.write_text('// Translation-domain helpers kept DOM-free for easier testing and reuse.\n\n' + translation_text, encoding='utf-8')
+# Language display names used by buildRoutePrompt belong to translation-domain helpers.
+lang_re = re.compile(r'(?ms)^const LANG_EN_NAME\s*=\s*\{.*?^\};\s*\n?')
+app_lang = lang_re.search(app)
+translation_lang = lang_re.search(translation)
+if app_lang:
+    block = app_lang.group(0).rstrip()
+    app = app[:app_lang.start()] + app[app_lang.end():]
+    if not translation_lang:
+        marker = 'function buildRoutePrompt('
+        pos = translation.find(marker)
+        if pos < 0:
+            raise SystemExit('translation insertion marker not found for LANG_EN_NAME')
+        translation = translation[:pos] + block + '\n\n' + translation[pos:]
+elif not translation_lang:
+    raise SystemExit('LANG_EN_NAME missing from both app and translation')
 
-APP.write_text(app.lstrip(), encoding='utf-8')
+# Guard the intended dependency direction.
+if 'stripCodeFence' in app:
+    raise SystemExit('app still owns stripCodeFence')
+if 'const LANG_EN_NAME' in app:
+    raise SystemExit('app still owns LANG_EN_NAME')
+if 'function stripCodeFence' not in client:
+    raise SystemExit('client does not own stripCodeFence')
+if 'const LANG_EN_NAME' not in translation:
+    raise SystemExit('translation does not own LANG_EN_NAME')
 
-old_tags = '<script src="./src/api/provider-adapters.js"></script>\n<script src="./src/app.js"></script>'
-new_tags = '''<script src="./src/core/config.js"></script>
-<script src="./src/api/provider-adapters.js"></script>
-<script src="./src/api/client.js"></script>
-<script src="./src/translation.js"></script>
-<script src="./src/app.js"></script>'''
-if old_tags not in index:
-    raise SystemExit('index script tag anchor not found')
-index = index.replace(old_tags, new_tags, 1)
-INDEX.write_text(index, encoding='utf-8')
-
-print('medium-granularity module split applied')
+APP.write_text(app, encoding='utf-8')
+CLIENT.write_text(client, encoding='utf-8')
+TRANSLATION.write_text(translation, encoding='utf-8')
+print('final module dependency cleanup applied')
