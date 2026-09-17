@@ -1,8 +1,9 @@
 @echo off
 chcp 65001 >nul
-REM 跨境电商翻译工具 - 一键启动器
-REM 自动打开独立 Chrome 实例（关闭跨域检查）并加载本工具
-REM 若同目录存在 proxy.txt，会自动把首行内容作为 Chrome 代理（--proxy-server）
+REM 跨境电商翻译工具 - 安全启动器
+REM 默认保留 Chrome 同源/CORS 安全机制，不再全局关闭 Web Security。
+REM 若同目录存在 proxy.txt，会自动把首行内容作为 Chrome 代理（--proxy-server）。
+REM 如目标 API 不支持浏览器 CORS，请优先使用桌面版；确需旧行为时使用“启动翻译工具(兼容模式).bat”。
 
 set "APP_PATH=%~dp0index.html"
 set "USER_DATA=%~dp0.chrome-profile"
@@ -31,7 +32,7 @@ if exist "%PROXY_FILE%" (
 set "PROXY_ARG="
 if defined PROXY set "PROXY_ARG=--proxy-server=%PROXY%"
 
-echo 正在启动跨境电商翻译工具...
+echo 正在以安全模式启动跨境电商翻译工具...
 echo Chrome 路径: %CHROME%
 echo 应用路径:   %APP_PATH%
 if defined PROXY (
@@ -40,8 +41,10 @@ if defined PROXY (
     echo 代理:        未启用（如需代理，把地址写入 proxy.txt）
 )
 echo.
-echo 提示: 这个 Chrome 实例已关闭跨域限制，仅用于本工具，不要拿它访问其他网站。
+echo 提示: 当前启动器不会关闭 Chrome 的同源/CORS 安全机制。
+echo       若 API 因 CORS 无法直接访问，请优先使用桌面版，或配置支持 CORS 的中转服务。
+echo       仅在确认风险后才使用“启动翻译工具(兼容模式).bat”。
 
-start "" "%CHROME%" --disable-web-security --disable-features=IsolateOrigins,site-per-process %PROXY_ARG% --user-data-dir="%USER_DATA%" --new-window "file:///%APP_PATH:\=/%"
+start "" "%CHROME%" %PROXY_ARG% --user-data-dir="%USER_DATA%" --new-window "file:///%APP_PATH:\=/%"
 
 exit /b 0

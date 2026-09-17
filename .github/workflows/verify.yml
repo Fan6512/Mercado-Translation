@@ -1,0 +1,41 @@
+name: Verify app safety and syntax
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'index.html'
+      - 'tailwind.min.css'
+      - '启动翻译工具.bat'
+      - '启动翻译工具(兼容模式).bat'
+      - 'tools/validate_app.py'
+      - '.github/workflows/verify.yml'
+  push:
+    branches:
+      - review/security-stability-v1
+    paths:
+      - 'index.html'
+      - 'tailwind.min.css'
+      - '启动翻译工具.bat'
+      - '启动翻译工具(兼容模式).bat'
+      - 'tools/validate_app.py'
+      - '.github/workflows/verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate app invariants and JavaScript syntax
+        run: python tools/validate_app.py
