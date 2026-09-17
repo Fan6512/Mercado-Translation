@@ -4,10 +4,25 @@ INDEX = Path("index.html")
 text = INDEX.read_text(encoding="utf-8")
 original = text
 
-old = '<script src="https://cdn.tailwindcss.com"></script>'
-new = '<link rel="stylesheet" href="./tailwind.min.css">'
-if old in text:
-    text = text.replace(old, new, 1)
+
+def replace_once(old: str, new: str, marker: str, label: str) -> None:
+    global text
+    if old in text:
+        text = text.replace(old, new, 1)
+        print(f"applied: {label}")
+        return
+    if marker in text:
+        print(f"already applied: {label}")
+        return
+    raise SystemExit(f"{label} target not found and marker missing; aborting")
+
+
+replace_once(
+    '<script src="https://cdn.tailwindcss.com"></script>',
+    '<link rel="stylesheet" href="./tailwind.min.css">',
+    './tailwind.min.css',
+    'local Tailwind CSS',
+)
 
 old = '''          // 流式读取（SSE）
           const reader = resp.body.getReader();
@@ -69,9 +84,7 @@ new = '''          // 流式读取（SSE）：按完整 event（空行）解析�
           }
           buffer += decoder.decode();
           if (buffer.trim()) consumeEvent(buffer);'''
-if old not in text:
-    raise SystemExit("SSE target block not found; aborting without write")
-text = text.replace(old, new, 1)
+replace_once(old, new, 'consumeEvent', 'robust SSE parser')
 
 old = '''    const failed = settled.filter(r => r.status === 'rejected');
     if (failed.length === ROUTES.length) throw failed[0].reason;
@@ -87,9 +100,7 @@ new = '''    const failed = settled.filter(r => r.status === 'rejected');
       return;
     }
     if (!Object.keys(merged).length) throw new Error('AI 未返回任何内容，请检查配置或重试');'''
-if old not in text:
-    raise SystemExit("partial-result target block not found; aborting without write")
-text = text.replace(old, new, 1)
+replace_once(old, new, '部分语种生成失败，已保留成功结果', 'partial-result guard')
 
 old = '''  for (const lang of ['en', 'es', 'pt', 'zh']) {
     const meta = LANG_META[lang];
@@ -100,9 +111,7 @@ new = '''  for (const lang of ['en', 'es', 'pt', 'zh']) {
     const item = result[lang];
     if (!item || !item.title) continue;
     const title = item.title;'''
-if old not in text:
-    raise SystemExit("render target block not found; aborting without write")
-text = text.replace(old, new, 1)
+replace_once(old, new, 'if (!item || !item.title) continue;', 'incremental rendering guard')
 
 old = '''function saveHistory(record) {
   const hist = JSON.parse(localStorage.getItem(STORE.history) || '[]');'''
@@ -114,9 +123,7 @@ new = '''function saveHistory(record) {
     return false;
   }
   const hist = JSON.parse(localStorage.getItem(STORE.history) || '[]');'''
-if old not in text:
-    raise SystemExit("history target block not found; aborting without write")
-text = text.replace(old, new, 1)
+replace_once(old, new, '跳过不完整结果', 'history completeness guard')
 
 old = '''  localStorage.setItem(STORE.history, JSON.stringify(hist));
 }'''
@@ -124,12 +131,19 @@ new = '''  localStorage.setItem(STORE.history, JSON.stringify(hist));
   return true;
 }'''
 pos = text.find('function saveHistory(record)')
-endpos = text.find(old, pos)
-if endpos == -1:
-    raise SystemExit("history return target not found; aborting without write")
-text = text[:endpos] + text[endpos:].replace(old, new, 1)
+if pos == -1:
+    raise SystemExit('saveHistory function missing')
+if 'return true;' not in text[pos:text.find('function clearHistory()', pos)]:
+    endpos = text.find(old, pos)
+    if endpos == -1:
+        raise SystemExit('history return target missing')
+    text = text[:endpos] + text[endpos:].replace(old, new, 1)
+    print('applied: history success return')
+else:
+    print('already applied: history success return')
 
-if text == original:
-    raise SystemExit("no changes applied")
-INDEX.write_text(text, encoding="utf-8", newline="\n")
-print("stability patch applied")
+if text != original:
+    INDEX.write_text(text, encoding="utf-8", newline="\n")
+    print('stability patch wrote index.html')
+else:
+    print('stability patch: index.html already up to date')
