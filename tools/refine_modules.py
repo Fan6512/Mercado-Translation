@@ -111,7 +111,8 @@ elif not client_strip:
 
 
 # Language display names used by buildRoutePrompt belong to translation-domain helpers.
-lang_re = re.compile(r'(?ms)^const LANG_EN_NAME\s*=\s*\{.*?^\};\s*\n?')
+# The original declaration is intentionally compact on one line; accept either compact or multi-line forms.
+lang_re = re.compile(r'(?m)^const LANG_EN_NAME\s*=\s*\{[^\n]*\};\s*\n?')
 app_lang = lang_re.search(app)
 translation_lang = lang_re.search(translation)
 if app_lang:
@@ -124,7 +125,12 @@ if app_lang:
             raise SystemExit('translation insertion marker not found for LANG_EN_NAME')
         translation = translation[:pos] + block + '\n\n' + translation[pos:]
 elif not translation_lang:
-    raise SystemExit('LANG_EN_NAME missing from both app and translation')
+    marker = 'function buildRoutePrompt('
+    pos = translation.find(marker)
+    if pos < 0:
+        raise SystemExit('translation insertion marker not found for LANG_EN_NAME')
+    block = "const LANG_EN_NAME = { en: 'English', es: 'Español', pt: 'Português', zh: '中文' };"
+    translation = translation[:pos] + block + '\n\n' + translation[pos:]
 
 if 'stripCodeFence' in app:
     raise SystemExit('app still owns stripCodeFence')
