@@ -1,0 +1,44 @@
+name: Final guarded repair
+
+on:
+  push:
+    branches:
+      - refactor/modular-api-adapter-v1
+    paths:
+      - 'tools/final_repair.py'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Remove recovered duplicate declarations
+        run: python tools/final_repair.py
+
+      - name: Rebuild local Tailwind CSS
+        run: npx --yes tailwindcss@3.4.17 -i ./tools/tailwind-input.css -o ./tailwind.min.css --content './index.html' './src/**/*.js' --minify
+
+      - name: Validate final application
+        run: python tools/validate_app.py
+
+      - name: Commit repaired application
+        run: |
+          if git diff --quiet -- src/app.js tailwind.min.css; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app.js tailwind.min.css
+          git commit -m 'fix: restore full app flow and preserve module boundaries [skip ci]'
+          git push
