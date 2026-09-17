@@ -17,7 +17,6 @@ def find_function_block(src: str, name: str):
     if not m:
         return None
 
-    # Find the function-body opening brace while respecting default object parameters.
     i = m.end()
     paren_depth = 1
     state = 'code'
@@ -102,7 +101,7 @@ if app_strip:
     start, end, block = app_strip
     app = app[:start] + app[end:]
     if not client_strip:
-        marker = '// opts: { temperature, maxTokens, messages, stream, signal, timeout, retry, onRetry }'
+        marker = 'async function callAI('
         pos = client.find(marker)
         if pos < 0:
             raise SystemExit('client insertion marker not found for stripCodeFence')
@@ -127,7 +126,6 @@ if app_lang:
 elif not translation_lang:
     raise SystemExit('LANG_EN_NAME missing from both app and translation')
 
-# Guard the intended dependency direction.
 if 'stripCodeFence' in app:
     raise SystemExit('app still owns stripCodeFence')
 if 'const LANG_EN_NAME' in app:
