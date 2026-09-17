@@ -4,8 +4,10 @@ on:
   pull_request:
     branches:
       - main
+      - review/security-stability-v1
     paths:
       - 'index.html'
+      - 'src/**/*.js'
       - 'tailwind.min.css'
       - '启动翻译工具.bat'
       - '启动翻译工具(兼容模式).bat'
@@ -14,8 +16,10 @@ on:
   push:
     branches:
       - review/security-stability-v1
+      - refactor/modular-api-adapter-v1
     paths:
       - 'index.html'
+      - 'src/**/*.js'
       - 'tailwind.min.css'
       - '启动翻译工具.bat'
       - '启动翻译工具(兼容模式).bat'
