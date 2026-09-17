@@ -2,6 +2,8 @@
 
 给未来在这个仓库工作的 AI 助手（Claude、Codex、Cursor、Copilot 等）的维护指南。
 
+> 文档分工：`README.md` 面向用户和普通开发者；本文件面向 AI/维护者；`docs/ARCHITECTURE.md` 记录长期架构边界与演进原则。
+
 ## 项目定位
 
 这是一个轻量级本地前端应用：
