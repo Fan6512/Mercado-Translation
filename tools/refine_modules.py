@@ -1,6 +1,7 @@
 from pathlib import Path
 import re
 
+# Final one-shot dependency-boundary cleanup before merge.
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / 'src' / 'app.js'
 CLIENT = ROOT / 'src' / 'api' / 'client.js'
