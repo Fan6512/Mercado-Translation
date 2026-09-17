@@ -33,9 +33,12 @@ def find_function_block(src: str, name: str):
     if not m:
         raise SystemExit(f'function not found: {name}')
     start = m.start()
-    brace = src.find('{', m.end())
-    if brace < 0:
+    # Find the function-body brace after the closing parameter paren. This avoids
+    # mistaking default-object params such as `({ timeoutMs = 0 } = {})` for the body.
+    body = re.search(r'\)\s*\{', src[m.end():])
+    if not body:
         raise SystemExit(f'opening brace not found: {name}')
+    brace = m.end() + body.end() - 1
 
     i = brace
     depth = 0
