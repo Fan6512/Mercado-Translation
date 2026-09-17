@@ -1,6 +1,7 @@
 from pathlib import Path
 import subprocess
 
+# Permanent CI guard for both the security baseline and the modularized application.
 root = Path(__file__).resolve().parents[1]
 index = (root / "index.html").read_text(encoding="utf-8")
 launcher = (root / "启动翻译工具.bat").read_text(encoding="utf-8")
