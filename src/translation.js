@@ -21,6 +21,8 @@ function stripPromptComments(text) {
     .join('\n');
 }
 
+const LANG_EN_NAME = { en: 'English', es: 'Español', pt: 'Português', zh: '中文' };
+
 function buildRoutePrompt(basePrompt, langs) {
   const pair = langs.map(l => {
     const needAnalysis = (l === 'es' || l === 'pt');
