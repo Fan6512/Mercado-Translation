@@ -62,3 +62,5 @@ jobs:
           git add index.html tailwind.min.css
           git commit -m 'fix: harden SSE partial results and localize Tailwind [skip ci]'
           git push origin HEAD:review/security-stability-v1
+
+# trigger: 2026-09-17
