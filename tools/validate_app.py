@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import tempfile
 
 # Permanent CI guard for the security baseline and the final five-module structure.
 # Keep this validator as the long-lived merge gate after one-shot migration tooling is removed.
@@ -48,6 +49,11 @@ checks = {
     "connection test uses provider adapter": "ProviderAdapters.buildChatRequest(p," in app,
     "API cleanup helper lives in client": "function stripCodeFence" in client and "function stripCodeFence" not in app,
     "language names live in translation": "const LANG_EN_NAME" in translation and "const LANG_EN_NAME" not in app,
+    "translation entrypoint present": "document.getElementById('btnTranslate').addEventListener('click'" in app,
+    "output renderer present": "function renderOutput(" in app,
+    "history writer present": "function saveHistory(" in app,
+    "compression flow present": "function shortenOverLimit(" in app and "MAX_SHORTEN_ROUNDS" in app,
+    "run cancellation present": "function cancelRun(" in app and "AbortController" in app,
     "partial-result guard present": "部分语种生成失败，已保留成功结果" in app,
     "partial results not written to history": "跳过不完整结果，不写入历史记录" in app,
     "incremental render skips missing languages": "if (!item || !item.title) continue;" in app,
@@ -59,6 +65,7 @@ for name, ok in checks.items():
 if failed:
     raise SystemExit("static validation failed: " + ", ".join(failed))
 
+# Check every file independently first.
 for js_path in paths:
     result = subprocess.run(["node", "--check", str(js_path)], text=True, capture_output=True)
     if result.returncode != 0:
@@ -66,3 +73,20 @@ for js_path in paths:
         print(result.stderr)
         raise SystemExit(f"JavaScript syntax validation failed: {js_path}")
     print(f"OK   JavaScript syntax: {js_path.relative_to(root)}")
+
+# Classic <script> files share one browser global lexical environment. Concatenating them
+# in load order catches cross-file duplicate `const`/`let` declarations that individual
+# node --check calls cannot see.
+with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as f:
+    for js_path in paths:
+        f.write(f"\n// ---- {js_path.relative_to(root)} ----\n")
+        f.write(js_path.read_text(encoding="utf-8"))
+        f.write("\n")
+    combined_js = f.name
+
+combined = subprocess.run(["node", "--check", combined_js], text=True, capture_output=True)
+if combined.returncode != 0:
+    print(combined.stdout)
+    print(combined.stderr)
+    raise SystemExit("Combined classic-script syntax validation failed")
+print("OK   Combined classic-script syntax")
