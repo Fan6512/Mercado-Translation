@@ -77,6 +77,94 @@ AI 驱动的跨境电商商品标题翻译工具。输入中文或英文标题�
 clean.bat
 ```
 
+
+## 自动正式发布（Windows）
+
+仓库使用 GitHub Actions 自动构建 Windows x64 桌面版。
+
+正式版本采用语义化 Tag：
+
+```text
+v1.0.0
+v1.1.0
+v2.0.0
+```
+
+只要 Tag 指向 `main` 中的提交，推送 Tag 后会自动执行：
+
+```text
+验证应用
+→ Windows x64 Pake 构建
+→ 生成安装包 + 独立 EXE
+→ 自签名
+→ 生成 SHA-256 校验文件
+→ 创建正式 GitHub Release
+→ 上传全部发布文件
+```
+
+发布示例：
+
+```bash
+git checkout main
+git pull
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Release workflow 固定使用经过验证的 Pake 版本，并把 Tag 中的版本号传给 `--app-version`。普通 push 到 `main` 不会创建 Release。
+
+### 一次性配置自签名证书
+
+为了让每次 Release 使用同一个发布者身份，不会在 CI 中临时生成随机证书。先在自己的 Windows 电脑运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\New-SelfSignedCodeSigningCert.ps1
+```
+
+脚本会生成：
+
+```text
+Mercado-Translation-CodeSigning.pfx
+Mercado-Translation-CodeSigning.cer
+Mercado-Translation-CodeSigning.base64.txt
+```
+
+其中：
+
+- `.pfx` 包含私钥，只能自己保存。
+- `.base64.txt` 是给 GitHub Secret 使用的私钥编码，同样不能公开。
+- `.cer` 只包含公钥证书，可以公开。
+- 上述本地证书文件已经加入 `.gitignore`，禁止提交到仓库。
+
+然后在 GitHub 仓库：
+
+```text
+Settings
+→ Secrets and variables
+→ Actions
+→ New repository secret
+```
+
+添加：
+
+| Secret | 内容 |
+| --- | --- |
+| `WINDOWS_CERT_PFX_BASE64` | `Mercado-Translation-CodeSigning.base64.txt` 的完整内容 |
+| `WINDOWS_CERT_PASSWORD` | 创建 PFX 时输入的密码 |
+
+之后所有正式 Release 都会复用这张证书，并使用 SHA-256 Authenticode 签名和 RFC3161 时间戳。
+
+> 这是自签名证书，不是公开 CA 信任的代码签名证书。EXE 虽然具有一致的数字签名，但未安装该证书的 Windows 设备仍可能显示 SmartScreen / 未知发布者警告。Release 会同时附带公开的 `.cer` 文件，供需要的设备手动建立信任。
+
+发布产物包括：
+
+```text
+Mercado-Translation-vX.Y.Z-Windows-x64.exe
+Mercado-Translation-vX.Y.Z-Windows-x64.msi   # Pake 生成 MSI 时
+Mercado-Translation-SelfSigned-Publisher.cer
+SHA256SUMS.txt
+```
+
 ## API 配置
 
 支持任意兼容 OpenAI Chat Completions 风格的服务。
@@ -311,14 +399,14 @@ CN = 60
 ├── tools/
 │   ├── tailwind-input.css
 │   ├── validate_app.py
-│   ├── refactor_modular.py
-│   └── refine_modules.py
+│   └── New-SelfSignedCodeSigningCert.ps1
 │
 ├── docs/
 │   └── ARCHITECTURE.md
 │
 ├── .github/workflows/
-│   └── verify.yml
+│   ├── verify.yml
+│   └── release-windows.yml
 │
 ├── 启动翻译工具.bat
 ├── 启动翻译工具(兼容模式).bat
