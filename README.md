@@ -80,6 +80,33 @@ clean.bat
 
 ## 自动正式发布（Windows）
 
+
+从 **v1.2.0** 起，Windows Release 固定提供两种产物：
+
+- `Mercado-Translation-vX.Y.Z-Windows-x64-Setup.msi`：**推荐安装 / 覆盖升级版**。同一 MSI UpgradeCode 跨版本保持不变，Windows 会把新版识别为同一个应用的升级。
+- `Mercado-Translation-vX.Y.Z-Windows-x64-Portable.exe`：**免安装便携版**。适合临时运行，不作为自动升级入口。
+
+Windows 安装版启动后会自动检查 GitHub 最新正式 Release。若发现更高版本，会弹出“发现新版本”提示；点击“立即升级”后，应用会下载本仓库 Release 中对应的 `Setup.msi`，以 Windows 被动安装模式启动覆盖升级并退出当前程序。
+
+自动更新的原生桥接只允许访问：
+
+```text
+https://github.com/Fan6512/Mercado-Translation/releases/download/...
+```
+
+且只接受符合固定命名规则的 `Mercado-Translation-vX.Y.Z-Windows-x64-Setup.msi`，不会执行任意 URL 或任意 MSI。
+
+安装身份显式锁定为当前 Tauri/Pake 历史默认身份：
+
+```text
+WiX UpgradeCode: 18f5c230-146b-5d19-988a-6204008097ea
+App Identifier:   com.pake.translator
+Product Name:     Translator
+```
+
+这样可保持与 v1.0.0 / v1.1.0 的既有安装身份连续，避免升级后出现两个独立安装项。
+
+
 仓库使用 GitHub Actions 自动构建 Windows x64 桌面版。
 
 正式版本采用语义化 Tag：
