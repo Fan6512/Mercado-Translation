@@ -1357,7 +1357,7 @@ async function checkForDesktopUpdate({ manual = false } = {}) {
       return;
     }
 
-    const expectedName = `Mercado-Translation-${tag}-Windows-x64.msi`;
+    const expectedName = `Mercado-Translation-${tag}-Windows-x64-Setup.msi`;
     const asset = Array.isArray(release.assets)
       ? release.assets.find(a => a && a.name === expectedName && a.browser_download_url)
       : null;
