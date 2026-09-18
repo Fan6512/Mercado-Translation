@@ -374,7 +374,7 @@ function askUserShorten(overLangs, round, signal) {
   return new Promise((resolve) => {
     const box = document.getElementById('shortenPrompt');
     const detail = overLangs.map(it =>
-      `<span class="inline-block px-2 py-0.5 bg-white border border-amber-300 rounded text-xs mr-1.5 mb-1">${LANG_LABEL[it.lang]} <span class="text-red-600 font-semibold">${it.count}/${it.limit}</span></span>`
+      `<span class="inline-block px-2 py-0.5 bg-white border border-amber-300 rounded text-xs mr-1.5 mb-1">${it.versionIndex != null ? `V${it.versionIndex + 1} · ` : ''}${LANG_LABEL[it.lang]} <span class="text-red-600 font-semibold">${it.count}/${it.limit}</span></span>`
     ).join('');
     const roundHint = round === 0 ? '' : `<span class="text-xs text-amber-700 ml-2">（已压缩 ${round} 轮，仍未达标）</span>`;
     box.innerHTML = `
@@ -493,6 +493,55 @@ ${overItems.map(it => `  "${it.lang}": { "title": "...", "analysis": "保留了�
 
 // ===== 分路 Prompt =====
 // 在全局 Prompt 之后追加「本次输出范围」，收窄单次请求需要输出的语种，减少输出 token
+// ===== 多标题结果兼容层 =====
+function normalizeTitleCount(value) {
+  return Math.min(3, Math.max(1, Number.parseInt(value, 10) || 1));
+}
+
+function getRequestedTitleCount() {
+  const el = document.getElementById('titleCount');
+  return normalizeTitleCount(el ? el.value : 1);
+}
+
+function getResultVersions(result) {
+  if (!result || typeof result !== 'object') return [];
+  if (Array.isArray(result.versions)) {
+    return result.versions.filter(v => v && typeof v === 'object' && !Array.isArray(v));
+  }
+  return [result];
+}
+
+function packResultVersions(versions, titleCount) {
+  const count = normalizeTitleCount(titleCount);
+  const list = (versions || []).slice(0, count);
+  return count === 1 ? (list[0] || {}) : { versions: list };
+}
+
+function mergeRouteVersions(targetVersions, part, titleCount) {
+  const count = normalizeTitleCount(titleCount);
+  const incoming = getResultVersions(part);
+  for (let i = 0; i < count; i++) {
+    const src = incoming[i];
+    if (!src) continue;
+    Object.assign(targetVersions[i], src);
+  }
+}
+
+function listAllOverLimit(result, charLimit, charLimitCN, scope) {
+  const versions = getResultVersions(result);
+  return versions.flatMap((version, versionIndex) =>
+    listOverLimit(version, charLimit, charLimitCN, scope)
+      .map(item => ({ ...item, versionIndex }))
+  );
+}
+
+function isCompleteTitleResult(result) {
+  const versions = getResultVersions(result);
+  return versions.length > 0 && versions.every(version =>
+    ['en', 'es', 'pt', 'zh'].every(lang => version[lang]?.title)
+  );
+}
+
 // ===== 运行控制（取消）=====
 // 同一时刻只允许一次生成；取消时 abort 掉所有在途请求，已渲染的部分结果保留。
 let activeRun = null;
@@ -524,6 +573,8 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
   const s = getSettings();
   const charLimit = s.charLimit ?? 55;
   const charLimitCN = s.charLimitCN ?? 60;
+  const titleCount = getRequestedTitleCount();
+  localStorage.setItem('translator_title_count', String(titleCount));
 
   let globalPrompt = (localStorage.getItem(STORE.globalPrompt) || DEFAULT_GLOBAL_PROMPT)
     .replace(/\{CHAR_LIMIT\}/g, charLimit)
@@ -566,7 +617,8 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
       { langs: ['en', 'zh'], label: '英/中' },
       { langs: ['es', 'pt'], label: '西/葡' },
     ];
-    const merged = {};
+    const mergedVersions = Array.from({ length: titleCount }, () => ({}));
+    const currentMerged = () => packResultVersions(mergedVersions, titleCount);
     const gotChars = {};
     const tick = () => {
       const got = Object.keys(gotChars).length;
@@ -576,7 +628,7 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
 
     const settled = await Promise.allSettled(ROUTES.map(async (route) => {
       const part = await callAI(
-        buildRoutePrompt(systemPrompt, route.langs),
+        buildRoutePrompt(systemPrompt, route.langs, titleCount),
         `原始标题：\n${input}`,
         (text) => { gotChars[route.label] = text.length; tick(); },
         {
@@ -587,9 +639,9 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
           },
         },
       );
-      Object.assign(merged, part);
-      // 增量渲染：哪一路先回来就先出它的卡片
-      renderOutput(merged, input, charLimit, charLimitCN);
+      mergeRouteVersions(mergedVersions, part, titleCount);
+      // 增量渲染：哪一路先回来就先出它的卡片；多标题按版本分组。
+      renderOutput(currentMerged(), input, charLimit, charLimitCN);
       return part;
     }));
 
@@ -603,7 +655,10 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
       showToast(`部分语种生成失败，已保留成功结果：${failed[0].reason?.message || failed[0].reason}`, 'error', 5000);
       return;
     }
-    if (!Object.keys(merged).length) throw new Error('AI 未返回任何内容，请检查配置或重试');
+    const merged = currentMerged();
+    if (!getResultVersions(merged).some(v => Object.keys(v).length)) {
+      throw new Error('AI 未返回任何内容，请检查配置或重试');
+    }
 
     // 最终渲染 + 校验字符数
     setStage('解析完成', '正在校验字符数');
@@ -624,7 +679,7 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
       let round = 0;
       while (true) {
         if (isRunCancelled(run)) { hideShortenPrompt(); break; }
-        const overLangs = listOverLimit(current, charLimit, charLimitCN, scope);
+        const overLangs = listAllOverLimit(current, charLimit, charLimitCN, scope);
         if (!overLangs.length) {
           hideShortenPrompt();
           break;
@@ -640,12 +695,34 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
         round++;
         loading.classList.remove('hidden');
         setStage(`第 ${round} 轮压缩`, `处理 ${overLangs.length} 条超限`);
-        const res = await shortenOverLimit(current, charLimit, charLimitCN, scope, {
-          ...callOpts,
-          onRetry: ({ attempt, maxRetry, waitMs, why }) => {
-            setStage(`压缩重试 ${attempt}/${maxRetry}`, `${why} · ${(waitMs / 1000).toFixed(1)}s 后重试`);
-          },
-        });
+        let res;
+        const currentVersions = getResultVersions(current);
+        if (currentVersions.length <= 1) {
+          res = await shortenOverLimit(currentVersions[0] || {}, charLimit, charLimitCN, scope, {
+            ...callOpts,
+            onRetry: ({ attempt, maxRetry, waitMs, why }) => {
+              setStage(`压缩重试 ${attempt}/${maxRetry}`, `${why} · ${(waitMs / 1000).toFixed(1)}s 后重试`);
+            },
+          });
+        } else {
+          const nextVersions = currentVersions.map(v => ({ ...v }));
+          let changed = false;
+          for (let i = 0; i < nextVersions.length; i++) {
+            if (!listOverLimit(nextVersions[i], charLimit, charLimitCN, scope).length) continue;
+            setStage(`第 ${round} 轮压缩`, `处理 V${i + 1}`);
+            const one = await shortenOverLimit(nextVersions[i], charLimit, charLimitCN, scope, {
+              ...callOpts,
+              onRetry: ({ attempt, maxRetry, waitMs, why }) => {
+                setStage(`V${i + 1} 压缩重试 ${attempt}/${maxRetry}`, `${why} · ${(waitMs / 1000).toFixed(1)}s 后重试`);
+              },
+            });
+            if (one.ok) {
+              nextVersions[i] = one.merged;
+              changed = true;
+            }
+          }
+          res = { merged: packResultVersions(nextVersions, titleCount), ok: changed };
+        }
         if (!res.ok) {
           loading.classList.add('hidden');
           if (!isRunCancelled(run)) showError('压缩请求失败，已保留原结果（可重试或手动调整）');
@@ -716,50 +793,72 @@ function renderOutput(result, input, charLimit, charLimitCN) {
   out.innerHTML = '';
   out.classList.remove('hidden');
 
-  for (const lang of ['en', 'es', 'pt', 'zh']) {
-    const meta = LANG_META[lang];
-    const item = result[lang];
-    if (!item || !item.title) continue;
-    const title = item.title;
-    const showAnalysis = (lang === 'es' || lang === 'pt');
-    const analysis = showAnalysis ? (item.analysis || '') : '';
-    const limit = meta.isCN ? charLimitCN : charLimit;
-    const count = countChars(title, meta.isCN);
-    let charClass = 'char-ok';
-    if (count > limit) charClass = 'char-over';
-    else if (count > limit * 0.95) charClass = 'char-warn';
+  const versions = getResultVersions(result);
+  const showVersionHeader = versions.length > 1;
 
-    const card = document.createElement('div');
-    card.className = 'lang-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md';
-    card.innerHTML = `
-      <div class="flex items-center justify-between mb-2">
-        <div class="flex items-center gap-2">
-          <span class="text-lg">${meta.flag}</span>
-          <span class="font-semibold text-slate-900">${meta.name}</span>
-          <span class="text-xs text-slate-400">${meta.desc}</span>
+  versions.forEach((version, versionIndex) => {
+    const group = document.createElement('div');
+    group.className = showVersionHeader
+      ? 'bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-3'
+      : 'space-y-3';
+
+    if (showVersionHeader) {
+      const heading = document.createElement('div');
+      heading.className = 'flex items-center justify-between px-1';
+      heading.innerHTML = `
+        <div class="font-semibold text-slate-800">候选标题 V${versionIndex + 1}</div>
+        <div class="text-xs text-slate-400">第 ${versionIndex + 1} / ${versions.length} 套</div>
+      `;
+      group.appendChild(heading);
+    }
+
+    for (const lang of ['en', 'es', 'pt', 'zh']) {
+      const meta = LANG_META[lang];
+      const item = version[lang];
+      if (!item || !item.title) continue;
+      const title = item.title;
+      const showAnalysis = (lang === 'es' || lang === 'pt');
+      const analysis = showAnalysis ? (item.analysis || '') : '';
+      const limit = meta.isCN ? charLimitCN : charLimit;
+      const count = countChars(title, meta.isCN);
+      let charClass = 'char-ok';
+      if (count > limit) charClass = 'char-over';
+      else if (count > limit * 0.95) charClass = 'char-warn';
+
+      const card = document.createElement('div');
+      card.className = 'lang-card bg-white border border-slate-200 rounded-xl p-4 shadow-sm hover:shadow-md';
+      card.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">${meta.flag}</span>
+            <span class="font-semibold text-slate-900">${meta.name}</span>
+            <span class="text-xs text-slate-400">${meta.desc}</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs ${charClass}">${count} / ${limit} 字符</span>
+            <button class="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">复制</button>
+          </div>
         </div>
-        <div class="flex items-center gap-3">
-          <span class="text-xs ${charClass}">${count} / ${limit} 字符</span>
-          <button class="text-xs px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded">复制</button>
-        </div>
-      </div>
-      <div class="font-mono text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-2 break-all select-all"></div>
-      ${analysis ? `<details class="mt-2" ${(lang === 'es' || lang === 'pt') ? 'open' : ''}><summary class="text-xs text-slate-500 hover:text-slate-800">📊 流量解析</summary><div class="text-xs text-slate-600 mt-1 leading-relaxed whitespace-pre-wrap"></div></details>` : ''}
-    `;
-    card.querySelector('.font-mono').textContent = title;
-    if (analysis) card.querySelector('details div').textContent = analysis;
-    card.querySelector('button').addEventListener('click', async () => {
-      if (await copyText(title)) flash(`${meta.name} 已复制`);
-      else showError('复制失败，请手动选中文本复制');
-    });
-    out.appendChild(card);
-  }
+        <div class="font-mono text-sm bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-2 break-all select-all"></div>
+        ${analysis ? `<details class="mt-2" ${(lang === 'es' || lang === 'pt') ? 'open' : ''}><summary class="text-xs text-slate-500 hover:text-slate-800">📊 流量解析</summary><div class="text-xs text-slate-600 mt-1 leading-relaxed whitespace-pre-wrap"></div></details>` : ''}
+      `;
+      card.querySelector('.font-mono').textContent = title;
+      if (analysis) card.querySelector('details div').textContent = analysis;
+      card.querySelector('button').addEventListener('click', async () => {
+        if (await copyText(title)) flash(`${meta.name} V${versionIndex + 1} 已复制`);
+        else showError('复制失败，请手动选中文本复制');
+      });
+      group.appendChild(card);
+    }
+
+    out.appendChild(group);
+  });
 }
 
 // ===== 历史 =====
 function saveHistory(record) {
   const result = record && record.result;
-  const complete = result && ['en', 'es', 'pt', 'zh'].every(lang => result[lang]?.title);
+  const complete = !!result && isCompleteTitleResult(result);
   if (!complete) {
     console.warn('[history] 跳过不完整结果，不写入历史记录');
     return false;
@@ -1175,3 +1274,8 @@ document.getElementById('gtSource').addEventListener('keydown', (e) => {
 loadSettings();
 loadGlobalPrompt();
 document.getElementById('fastMode').checked = localStorage.getItem('translator_fast_mode') === '1';
+document.getElementById('titleCount').value = String(normalizeTitleCount(localStorage.getItem('translator_title_count') || '1'));
+document.getElementById('titleCount').addEventListener('change', (e) => {
+  e.target.value = String(normalizeTitleCount(e.target.value));
+  localStorage.setItem('translator_title_count', e.target.value);
+});
