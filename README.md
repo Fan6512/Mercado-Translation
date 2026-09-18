@@ -90,7 +90,19 @@ v1.1.0
 v2.0.0
 ```
 
-只要 Tag 指向 `main` 中的提交，推送 Tag 后会自动执行：
+除了本地推送 Tag，也可以完全在 GitHub 网页手动发布：
+
+```text
+Actions
+→ Release Windows desktop
+→ Run workflow
+→ 输入版本号，例如 v1.2.0
+→ Run workflow
+```
+
+手动模式会固定从最新 `main` 构建；构建、签名、校验全部成功后，workflow 会自动创建对应 Tag 和正式 GitHub Release。无需本地 Git。
+
+只要 Tag 指向 `main` 中的提交，或者使用 GitHub 手动发布入口输入合法的 `vX.Y.Z` 版本号，就会自动执行：
 
 ```text
 验证应用
