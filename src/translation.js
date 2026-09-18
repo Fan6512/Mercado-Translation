@@ -114,6 +114,105 @@ Return only valid JSON, no Markdown code fence and no extra text:
     return `【原始产品资料】\n${data.rawData || '（未提供）'}\n\n【补充 / 修正信息（最高优先级）】\n${data.corrections || '（无）'}\n\n【参考标题 / 关键词】\n${data.referenceTitle || '（无）'}`;
   }
 
+  function pwSwitchPromptTab(tab) {
+    const isTitle = tab !== 'description';
+    pwById('promptTitlePane')?.classList.toggle('hidden', !isTitle);
+    pwById('promptDescriptionPane')?.classList.toggle('hidden', isTitle);
+    const titleBtn = pwById('btnPromptTabTitle');
+    const descBtn = pwById('btnPromptTabDescription');
+    if (titleBtn) {
+      titleBtn.className = isTitle
+        ? 'px-3 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white'
+        : 'px-3 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100';
+    }
+    if (descBtn) {
+      descBtn.className = !isTitle
+        ? 'px-3 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white'
+        : 'px-3 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100';
+    }
+  }
+
+  function pwTogglePromptPanel(forceOpen = null) {
+    const panel = pwById('promptPanel');
+    const btn = pwById('btnPrompts');
+    if (!panel || !btn) return;
+    const shouldOpen = forceOpen == null ? panel.classList.contains('hidden') : !!forceOpen;
+    panel.classList.toggle('hidden', !shouldOpen);
+    btn.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+    btn.classList.toggle('bg-blue-50', shouldOpen);
+    btn.classList.toggle('border-blue-300', shouldOpen);
+    btn.classList.toggle('text-blue-700', shouldOpen);
+    if (shouldOpen) setTimeout(() => pwById('globalPrompt')?.focus(), 0);
+  }
+
+  function pwMountPromptDrawer() {
+    if (pwById('promptPanel')) return;
+    const quickSwitch = pwById('profileQuickSwitch');
+    const headerActions = quickSwitch?.parentElement;
+    if (!quickSwitch || !headerActions) return;
+
+    const promptButton = document.createElement('button');
+    promptButton.id = 'btnPrompts';
+    promptButton.type = 'button';
+    promptButton.className = 'px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100';
+    promptButton.textContent = '🧠 Prompt';
+    promptButton.title = '编辑标题 Prompt 和产品描述 Prompt';
+    promptButton.setAttribute('aria-controls', 'promptPanel');
+    promptButton.setAttribute('aria-expanded', 'false');
+    quickSwitch.insertAdjacentElement('afterend', promptButton);
+
+    const oldGlobalPrompt = pwById('globalPrompt');
+    const oldPromptSection = oldGlobalPrompt?.closest('section');
+    const oldGlobalValue = oldGlobalPrompt?.value || '';
+
+    const panel = document.createElement('aside');
+    panel.id = 'promptPanel';
+    panel.className = 'hidden fixed top-0 right-0 z-[70] h-full w-full max-w-[620px] bg-white border-l border-slate-200 shadow-2xl overflow-y-auto';
+    panel.innerHTML = `
+      <div class="sticky top-0 z-10 bg-white border-b border-slate-200 px-5 py-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900">Prompt 设置</h2>
+            <p class="text-xs text-slate-400 mt-0.5">高级规则集中管理；再次点击右上角 Prompt 可收起。</p>
+          </div>
+          <button id="btnClosePrompts" type="button" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="收起">✕</button>
+        </div>
+        <div class="flex gap-2 mt-4 bg-slate-50 rounded-xl p-1">
+          <button id="btnPromptTabTitle" type="button" class="px-3 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white">标题 Prompt</button>
+          <button id="btnPromptTabDescription" type="button" class="px-3 py-2 text-sm font-medium rounded-lg text-slate-600 hover:bg-slate-100">产品描述 Prompt</button>
+        </div>
+      </div>
+      <div class="p-5">
+        <section id="promptTitlePane">
+          <div class="mb-3">
+            <h3 class="text-sm font-semibold text-slate-900">标题 Prompt（全局系统提示词）</h3>
+            <p class="text-xs text-slate-500 mt-1">控制四语标题的 SEO、字符数和输出结构。每个商品临时要求仍使用主页面的“本次标题 Prompt”。</p>
+          </div>
+          <p class="text-xs text-slate-500 mb-2">行首 <code class="bg-slate-100 px-1 rounded">//</code> 或 <code class="bg-slate-100 px-1 rounded">#!</code> 可注释；<code class="bg-slate-100 px-1 rounded">{CHAR_LIMIT}</code> / <code class="bg-slate-100 px-1 rounded">{CHAR_LIMIT_CN}</code> 会替换为当前配置上限。</p>
+          <textarea id="globalPrompt" rows="24" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <div class="flex justify-end gap-2 mt-3">
+            <button id="btnResetPromptDrawer" type="button" class="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-100">恢复默认</button>
+            <button id="btnSavePromptDrawer" type="button" class="px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-900">保存标题 Prompt</button>
+          </div>
+        </section>
+        <section id="promptDescriptionPane" class="hidden">
+          <div class="mb-3">
+            <h3 class="text-sm font-semibold text-slate-900">产品描述 Prompt</h3>
+            <p class="text-xs text-slate-500 mt-1">独立控制英文产品描述的事实合并、冲突处理和输出结构，不影响标题 Prompt。</p>
+          </div>
+          <textarea id="descriptionPrompt" rows="24" class="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+          <div class="flex justify-end gap-2 mt-3">
+            <button id="btnResetDescriptionPrompt" type="button" class="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-100">恢复默认</button>
+            <button id="btnSaveDescriptionPrompt" type="button" class="px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-900">保存描述 Prompt</button>
+          </div>
+        </section>
+        <p class="text-xs text-slate-400 mt-5 pt-4 border-t border-slate-100">Prompt 仅保存在当前浏览器 / 客户端本地，不会随请求以外的方式上传。</p>
+      </div>`;
+    document.body.appendChild(panel);
+    pwById('globalPrompt').value = oldGlobalValue;
+    oldPromptSection?.remove();
+  }
+
   function pwMountUI() {
     const section = pwById('btnTranslate')?.closest('section');
     const inputTitle = pwById('inputTitle');
@@ -152,17 +251,6 @@ Return only valid JSON, no Markdown code fence and no extra text:
     const sessionSummary = sessionDetails?.querySelector('summary');
     if (sessionSummary) sessionSummary.textContent = '💬 本次标题 Prompt（可选，补充本次特殊标题要求）';
 
-    const descriptionPrompt = document.createElement('details');
-    descriptionPrompt.className = 'mt-3';
-    descriptionPrompt.innerHTML = `
-      <summary class="text-sm font-medium text-slate-700 mb-2">🧾 产品描述 Prompt（可编辑，独立于标题 Prompt）</summary>
-      <textarea id="descriptionPrompt" rows="12" class="w-full mt-2 px-3 py-2 text-xs border border-slate-300 rounded-lg leading-relaxed"></textarea>
-      <div class="flex justify-end gap-2 mt-2">
-        <button id="btnResetDescriptionPrompt" type="button" class="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg hover:bg-slate-100">恢复默认</button>
-        <button id="btnSaveDescriptionPrompt" type="button" class="px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-900">保存描述 Prompt</button>
-      </div>`;
-    sessionDetails.insertAdjacentElement('afterend', descriptionPrompt);
-
     const descriptionBlock = document.createElement('div');
     descriptionBlock.className = 'mt-5 pt-5 border-t border-slate-200';
     descriptionBlock.innerHTML = `
@@ -192,14 +280,13 @@ Return only valid JSON, no Markdown code fence and no extra text:
       </div>`;
     section.insertBefore(descriptionBlock, titleActions);
 
-    const globalPromptTitle = pwById('globalPrompt')?.closest('details')?.querySelector('summary .font-semibold');
-    if (globalPromptTitle) globalPromptTitle.textContent = '🌐 标题 Prompt（全局系统提示词）';
     const applyBtn = pwById('btnApplyToOriginal');
     if (applyBtn) applyBtn.textContent = '⬇️ 应用到参考标题';
   }
 
   function pwLoadPrompt() {
-    pwById('descriptionPrompt').value = localStorage.getItem(PW_DESCRIPTION_PROMPT_KEY) || PW_DEFAULT_DESCRIPTION_PROMPT;
+    const el = pwById('descriptionPrompt');
+    if (el) el.value = localStorage.getItem(PW_DESCRIPTION_PROMPT_KEY) || PW_DEFAULT_DESCRIPTION_PROMPT;
   }
 
   function pwSetBusy(busy, detail = '') {
@@ -260,6 +347,13 @@ Return only valid JSON, no Markdown code fence and no extra text:
   }
 
   function pwBind() {
+    pwById('btnPrompts').addEventListener('click', () => pwTogglePromptPanel());
+    pwById('btnClosePrompts').addEventListener('click', () => pwTogglePromptPanel(false));
+    pwById('btnPromptTabTitle').addEventListener('click', () => pwSwitchPromptTab('title'));
+    pwById('btnPromptTabDescription').addEventListener('click', () => pwSwitchPromptTab('description'));
+    pwById('btnSavePromptDrawer').addEventListener('click', () => saveGlobalPrompt());
+    pwById('btnResetPromptDrawer').addEventListener('click', () => resetGlobalPrompt());
+
     pwById('btnGenerateDescription').addEventListener('click', pwGenerateDescription);
     pwById('btnRegenerateDescription').addEventListener('click', pwGenerateDescription);
     pwById('btnCancelDescription').addEventListener('click', () => pwDescriptionController?.abort());
@@ -294,11 +388,18 @@ Return only valid JSON, no Markdown code fence and no extra text:
         console.warn('[product-workspace] history restore failed:', err);
       }
     }, true);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !pwById('promptPanel')?.classList.contains('hidden')) {
+        pwTogglePromptPanel(false);
+      }
+    });
   }
 
   function pwInit() {
+    pwMountPromptDrawer();
     pwMountUI();
     pwLoadPrompt();
+    pwSwitchPromptTab('title');
     pwBind();
     pwInstallTitleBridge();
   }
