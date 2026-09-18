@@ -57,6 +57,10 @@ checks = {
     "partial-result guard present": "部分语种生成失败，已保留成功结果" in app,
     "partial results not written to history": "跳过不完整结果，不写入历史记录" in app,
     "incremental render skips missing languages": "if (!item || !item.title) continue;" in app,
+    "title count selector present": 'id="titleCount"' in index and '<option value="3">3 个</option>' in index,
+    "route prompt supports title count": "function buildRoutePrompt(basePrompt, langs, titleCount = 1)" in translation and '"versions": [' in translation,
+    "multi-title result compatibility present": "function getResultVersions(" in app and "function mergeRouteVersions(" in app,
+    "multi-title history completeness guarded": "isCompleteTitleResult(result)" in app,
 }
 
 failed = [name for name, ok in checks.items() if not ok]
