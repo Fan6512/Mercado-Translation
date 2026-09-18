@@ -42,41 +42,21 @@ $winConfig | ConvertTo-Json -Depth 20 | Set-Content $winConfigPath -Encoding utf
 #    - launches msiexec in passive upgrade mode and exits the current app
 $invoke = Get-Content $invokePath -Raw
 if ($invoke -notmatch 'download_and_install_update') {
-    $structAnchor = @'
-#[derive(serde::Deserialize)]
-pub struct NotificationParams {
-    title: String,
-    body: String,
-    icon: String,
-}
-'@
+    $anchorMatch = [regex]::Match(
+        $invoke,
+        '(?m)^#\[command\]\s*\r?\npub fn send_notification'
+    )
+    if (-not $anchorMatch.Success) {
+        throw 'Unexpected Pake invoke.rs: send_notification command anchor not found.'
+    }
 
-    $structInsert = @'
-#[derive(serde::Deserialize)]
-pub struct NotificationParams {
-    title: String,
-    body: String,
-    icon: String,
-}
-
+    $commandInsert = @'
 #[derive(serde::Deserialize)]
 pub struct InstallUpdateParams {
     url: String,
     filename: String,
 }
-'@
 
-    if (-not $invoke.Contains($structAnchor)) {
-        throw 'Unexpected Pake invoke.rs: NotificationParams anchor not found.'
-    }
-    $invoke = $invoke.Replace($structAnchor, $structInsert)
-
-    $commandAnchor = @'
-#[command]
-pub fn send_notification(app: AppHandle, params: NotificationParams) -> Result<(), String> {
-'@
-
-    $commandInsert = @'
 #[command]
 pub async fn download_and_install_update(
     app: AppHandle,
@@ -152,40 +132,36 @@ pub async fn download_and_install_update(
     }
 }
 
-#[command]
-pub fn send_notification(app: AppHandle, params: NotificationParams) -> Result<(), String> {
 '@
 
-    if (-not $invoke.Contains($commandAnchor)) {
-        throw 'Unexpected Pake invoke.rs: send_notification anchor not found.'
-    }
-    $invoke = $invoke.Replace($commandAnchor, $commandInsert)
+    $invoke = $invoke.Insert($anchorMatch.Index, $commandInsert)
     Set-Content $invokePath -Value $invoke -Encoding utf8
 }
 
 # 3) Register the command in the Tauri invoke handler.
 $lib = Get-Content $libPath -Raw
 if ($lib -notmatch 'download_and_install_update') {
-    $importOld = 'clear_dock_badge, download_file, increment_dock_badge, send_notification, set_dock_badge,'
-    $importNew = 'clear_dock_badge, download_and_install_update, download_file, increment_dock_badge, send_notification, set_dock_badge,'
-    if (-not $lib.Contains($importOld)) {
-        throw 'Unexpected Pake lib.rs: invoke import anchor not found.'
+    $updated = [regex]::Replace(
+        $lib,
+        'invoke::\{\s*',
+        'invoke::{ download_and_install_update, ',
+        1
+    )
+    if ($updated -eq $lib) {
+        throw 'Unexpected Pake lib.rs: invoke import block not found.'
     }
-    $lib = $lib.Replace($importOld, $importNew)
+    $lib = $updated
 
-    $handlerOld = @'
-        .invoke_handler(tauri::generate_handler![
-            download_file,
-'@
-    $handlerNew = @'
-        .invoke_handler(tauri::generate_handler![
-            download_and_install_update,
-            download_file,
-'@
-    if (-not $lib.Contains($handlerOld)) {
-        throw 'Unexpected Pake lib.rs: invoke handler anchor not found.'
+    $updated = [regex]::Replace(
+        $lib,
+        '\.invoke_handler\(tauri::generate_handler!\[\s*',
+        '.invoke_handler(tauri::generate_handler![ download_and_install_update, ',
+        1
+    )
+    if ($updated -eq $lib) {
+        throw 'Unexpected Pake lib.rs: invoke handler block not found.'
     }
-    $lib = $lib.Replace($handlerOld, $handlerNew)
+    $lib = $updated
     Set-Content $libPath -Value $lib -Encoding utf8
 }
 
