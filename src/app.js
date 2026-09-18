@@ -1281,6 +1281,145 @@ document.getElementById('gtSource').addEventListener('keydown', (e) => {
   }
 });
 
+// ===== Windows 桌面版自动更新 =====
+// Release workflow 会在打包前把占位符替换成实际版本，例如 1.2.0。
+// 网页版 / 本地源码模式保留占位符，因此不会启用原生安装更新。
+const APP_RELEASE_VERSION = '__APP_VERSION__';
+const RELEASE_LATEST_API = 'https://api.github.com/repos/Fan6512/Mercado-Translation/releases/latest';
+let pendingDesktopUpdate = null;
+
+function parseSemver(version) {
+  const m = String(version || '').trim().replace(/^v/i, '').match(/^(\d+)\.(\d+)\.(\d+)$/);
+  return m ? m.slice(1).map(Number) : null;
+}
+
+function compareSemver(a, b) {
+  const av = parseSemver(a);
+  const bv = parseSemver(b);
+  if (!av || !bv) return 0;
+  for (let i = 0; i < 3; i++) {
+    if (av[i] !== bv[i]) return av[i] > bv[i] ? 1 : -1;
+  }
+  return 0;
+}
+
+function canUseNativeUpdater() {
+  return !!(
+    parseSemver(APP_RELEASE_VERSION) &&
+    window.__TAURI__ &&
+    window.__TAURI__.core &&
+    typeof window.__TAURI__.core.invoke === 'function'
+  );
+}
+
+function closeUpdateDialog() {
+  if (document.getElementById('btnInstallUpdate').disabled) return;
+  document.getElementById('updateDialog').classList.add('hidden');
+  document.getElementById('updateProgress').classList.add('hidden');
+}
+
+function openUpdateDialog(update) {
+  pendingDesktopUpdate = update;
+  document.getElementById('updateVersionText').textContent =
+    `当前 v${APP_RELEASE_VERSION} → 最新 ${update.tag}`;
+  document.getElementById('updateProgress').classList.add('hidden');
+  document.getElementById('btnInstallUpdate').disabled = false;
+  document.getElementById('btnInstallUpdate').textContent = '立即升级';
+  document.getElementById('updateDialog').classList.remove('hidden');
+}
+
+async function checkForDesktopUpdate({ manual = false } = {}) {
+  if (!canUseNativeUpdater()) {
+    if (manual) showToast('当前不是支持自动升级的 Windows 安装版', 'info', 3200);
+    return;
+  }
+
+  const btn = document.getElementById('btnCheckUpdate');
+  const oldText = btn.textContent;
+  if (manual) {
+    btn.disabled = true;
+    btn.textContent = '检查中…';
+  }
+
+  try {
+    const resp = await fetch(RELEASE_LATEST_API, {
+      headers: { 'Accept': 'application/vnd.github+json' },
+      cache: 'no-store',
+    });
+    if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
+
+    const release = await resp.json();
+    const tag = String(release.tag_name || '').trim();
+    if (!parseSemver(tag)) throw new Error('最新 Release 版本号格式不正确');
+
+    if (compareSemver(tag, APP_RELEASE_VERSION) <= 0) {
+      if (manual) showToast(`当前已是最新版本 v${APP_RELEASE_VERSION}`, 'success', 2800);
+      return;
+    }
+
+    const expectedName = `Mercado-Translation-${tag}-Windows-x64.msi`;
+    const asset = Array.isArray(release.assets)
+      ? release.assets.find(a => a && a.name === expectedName && a.browser_download_url)
+      : null;
+    if (!asset) {
+      throw new Error(`Release ${tag} 未找到升级安装包 ${expectedName}`);
+    }
+
+    openUpdateDialog({
+      tag,
+      filename: asset.name,
+      url: asset.browser_download_url,
+      releaseUrl: release.html_url || '',
+    });
+  } catch (err) {
+    if (manual) showError('检查更新失败：' + (err.message || err));
+    else console.warn('[updater] startup update check failed:', err);
+  } finally {
+    if (manual) {
+      btn.disabled = false;
+      btn.textContent = oldText;
+    }
+  }
+}
+
+async function installPendingDesktopUpdate() {
+  if (!pendingDesktopUpdate || !canUseNativeUpdater()) return;
+
+  const installBtn = document.getElementById('btnInstallUpdate');
+  const progress = document.getElementById('updateProgress');
+  installBtn.disabled = true;
+  installBtn.textContent = '正在升级…';
+  progress.textContent = '正在从 GitHub 下载 MSI。下载完成后会自动启动覆盖安装，当前程序将退出。';
+  progress.classList.remove('hidden');
+
+  try {
+    await window.__TAURI__.core.invoke('download_and_install_update', {
+      params: {
+        url: pendingDesktopUpdate.url,
+        filename: pendingDesktopUpdate.filename,
+      },
+    });
+  } catch (err) {
+    installBtn.disabled = false;
+    installBtn.textContent = '重试升级';
+    progress.textContent = '升级失败：' + (err?.message || err);
+    progress.classList.remove('hidden');
+  }
+}
+
+document.getElementById('btnCheckUpdate').addEventListener('click', () => {
+  checkForDesktopUpdate({ manual: true });
+});
+document.getElementById('btnInstallUpdate').addEventListener('click', installPendingDesktopUpdate);
+document.getElementById('btnCloseUpdate').addEventListener('click', closeUpdateDialog);
+document.getElementById('btnLaterUpdate').addEventListener('click', closeUpdateDialog);
+
+if (canUseNativeUpdater()) {
+  document.getElementById('btnCheckUpdate').classList.remove('hidden');
+  // 不阻塞主界面启动；网络失败也只记控制台，不打扰正常使用。
+  setTimeout(() => checkForDesktopUpdate({ manual: false }), 1200);
+}
+
 // ===== 初始化 =====
 loadSettings();
 loadGlobalPrompt();
