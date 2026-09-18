@@ -198,8 +198,8 @@ Settings
 发布产物包括：
 
 ```text
-Mercado-Translation-vX.Y.Z-Windows-x64.exe
-Mercado-Translation-vX.Y.Z-Windows-x64.msi   # Pake 生成 MSI 时
+Mercado-Translation-vX.Y.Z-Windows-x64-Portable.exe
+Mercado-Translation-vX.Y.Z-Windows-x64-Setup.msi
 Mercado-Translation-SelfSigned-Publisher.cer
 SHA256SUMS.txt
 ```
@@ -438,7 +438,8 @@ CN = 60
 ├── tools/
 │   ├── tailwind-input.css
 │   ├── validate_app.py
-│   └── New-SelfSignedCodeSigningCert.ps1
+│   ├── New-SelfSignedCodeSigningCert.ps1
+│   └── Patch-PakeWindowsUpdater.ps1
 │
 ├── docs/
 │   └── ARCHITECTURE.md
