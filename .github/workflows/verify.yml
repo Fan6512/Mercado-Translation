@@ -73,3 +73,52 @@ jobs:
               throw "PowerShell syntax validation failed: $script"
             }
           }
+
+
+  validate-windows-updater-template:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare Rust
+        shell: pwsh
+        run: |
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install pinned Pake
+        shell: pwsh
+        run: |
+          npm install --global "pake-cli@3.16.3"
+          pake --version
+
+      - name: Patch pinned Pake Windows template
+        shell: pwsh
+        run: |
+          .\tools\Patch-PakeWindowsUpdater.ps1
+
+          $pakeRoot = Join-Path ((& npm root -g).Trim()) 'pake-cli'
+          $configPath = Join-Path $pakeRoot 'src-tauri\tauri.windows.conf.json'
+          $config = Get-Content $configPath -Raw | ConvertFrom-Json
+          if ($config.bundle.windows.wix.upgradeCode -ne '1ffd51d4-30e3-5cb0-996c-b694974be021') {
+            throw 'Pinned MSI UpgradeCode was not applied.'
+          }
+
+          $invokePath = Join-Path $pakeRoot 'src-tauri\src\app\invoke.rs'
+          $invoke = Get-Content $invokePath -Raw
+          if (-not $invoke.Contains('download_and_install_update')) {
+            throw 'Native updater bridge was not applied.'
+          }
+
+      - name: Cargo check patched Pake template
+        shell: pwsh
+        run: |
+          $pakeRoot = Join-Path ((& npm root -g).Trim()) 'pake-cli'
+          cargo check --manifest-path (Join-Path $pakeRoot 'src-tauri\Cargo.toml')
