@@ -33,6 +33,12 @@ translator-config-*.json
 # AI 助手在本地建的工作目录（静态检查器、验证脚本、工作日志），属本机数据
 .workbuddy/
 
+# ===== 代码签名私钥（绝对不能提交） =====
+*.pfx
+*.p12
+*.base64.txt
+Mercado-Translation-CodeSigning.cer
+
 # ===== 图标生成中间产物 =====
 # icon.svg 提交；icon.ico / icon.png 由用户本地生成
 icon.ico

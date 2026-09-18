@@ -13,6 +13,8 @@ on:
       - 'tools/validate_app.py'
       - 'tools/tailwind-input.css'
       - '.github/workflows/verify.yml'
+      - '.github/workflows/release-windows.yml'
+      - 'tools/New-SelfSignedCodeSigningCert.ps1'
   push:
     branches:
       - main
@@ -25,6 +27,8 @@ on:
       - 'tools/validate_app.py'
       - 'tools/tailwind-input.css'
       - '.github/workflows/verify.yml'
+      - '.github/workflows/release-windows.yml'
+      - 'tools/New-SelfSignedCodeSigningCert.ps1'
 
 permissions:
   contents: read
@@ -43,3 +47,22 @@ jobs:
 
       - name: Validate app invariants and JavaScript syntax
         run: python tools/validate_app.py
+
+      - name: Validate release workflow YAML
+        run: |
+          ruby -e "require 'yaml'; YAML.safe_load(File.read('.github/workflows/release-windows.yml'), aliases: true)"
+
+      - name: Validate release helper PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path '.\tools\New-SelfSignedCodeSigningCert.ps1').Path,
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'PowerShell syntax validation failed.'
+          }
