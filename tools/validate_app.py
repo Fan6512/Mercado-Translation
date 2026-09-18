@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -33,6 +34,18 @@ script_order = [
 ]
 script_positions = [index.find(src) for src in script_order]
 
+# Never ship repository-provided credentials in the desktop/web bundle.
+# User API keys must only enter via localStorage at runtime after the user types/imports them.
+runtime_text = index + "\n" + "\n".join(p.read_text(encoding="utf-8") for p in paths if p.exists())
+secret_patterns = {
+    "OpenAI/OpenRouter/Anthropic-style API key": re.compile(r"\bsk-(?:ant-|or-v1-)?[A-Za-z0-9_-]{20,}\b"),
+    "Google API key": re.compile(r"\bAIza[0-9A-Za-z_-]{30,}\b"),
+    "GitHub token": re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+}
+secret_hits = [name for name, pattern in secret_patterns.items() if pattern.search(runtime_text)]
+nonempty_preset_key = re.search(r"\bkey\s*:\s*(['\"])(?!\1)[^'\"\r\n]+\1", core)
+api_key_has_default_value = bool(re.search(r'id=["\']apiKey["\'][^>]*\bvalue\s*=\s*["\'][^"\']+', index))
+
 checks = {
     "runtime Tailwind CDN removed": "cdn.tailwindcss.com" not in index,
     "local Tailwind CSS linked": './tailwind.min.css' in index,
@@ -43,6 +56,9 @@ checks = {
     "five scripts load in dependency order": all(a < b for a, b in zip(script_positions, script_positions[1:])),
     "inline application script removed": '// ===== 默认全局 Prompt =====' not in index,
     "configuration lives in core": "const STORE =" in core and "const PROFILE_PRESETS =" in core,
+    "repository presets contain no API key": nonempty_preset_key is None,
+    "API key input has no bundled default value": not api_key_has_default_value,
+    "runtime bundle contains no high-confidence secret pattern": not secret_hits,
     "adapter exposes generic fallback": "return 'generic';" in adapter,
     "robust SSE parser lives in client": "const consumeEvent = (rawEvent) =>" in client,
     "main request uses provider adapter": "ProviderAdapters.buildChatRequest(s," in client,
@@ -70,6 +86,8 @@ checks = {
 failed = [name for name, ok in checks.items() if not ok]
 for name, ok in checks.items():
     print(("OK   " if ok else "FAIL ") + name)
+if secret_hits:
+    print("Secret scanner matched: " + ", ".join(secret_hits))
 if failed:
     raise SystemExit("static validation failed: " + ", ".join(failed))
 
