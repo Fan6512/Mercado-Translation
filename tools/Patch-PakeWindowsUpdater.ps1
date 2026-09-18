@@ -95,7 +95,7 @@ pub async fn download_and_install_update(
 
     let filename = params.filename.trim();
     if !filename.starts_with("Mercado-Translation-v")
-        || !filename.ends_with("-Windows-x64.msi")
+        || !filename.ends_with("-Windows-x64-Setup.msi")
         || filename.contains(['/', '\\'])
     {
         return Err("Unexpected update installer filename.".into());
