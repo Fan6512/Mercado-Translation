@@ -15,6 +15,7 @@ on:
       - '.github/workflows/verify.yml'
       - '.github/workflows/release-windows.yml'
       - 'tools/New-SelfSignedCodeSigningCert.ps1'
+      - 'tools/Patch-PakeWindowsUpdater.ps1'
   push:
     branches:
       - main
@@ -29,6 +30,7 @@ on:
       - '.github/workflows/verify.yml'
       - '.github/workflows/release-windows.yml'
       - 'tools/New-SelfSignedCodeSigningCert.ps1'
+      - 'tools/Patch-PakeWindowsUpdater.ps1'
 
 permissions:
   contents: read
@@ -55,14 +57,19 @@ jobs:
       - name: Validate release helper PowerShell syntax
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path '.\tools\New-SelfSignedCodeSigningCert.ps1').Path,
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            throw 'PowerShell syntax validation failed.'
+          foreach ($script in @(
+            '.\tools\New-SelfSignedCodeSigningCert.ps1',
+            '.\tools\Patch-PakeWindowsUpdater.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script).Path,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$script : $($_.Message)" }
+              throw "PowerShell syntax validation failed: $script"
+            }
           }
