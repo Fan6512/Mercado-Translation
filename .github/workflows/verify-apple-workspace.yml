@@ -1,0 +1,56 @@
+name: Verify Apple workspace preview
+
+on:
+  pull_request:
+    paths:
+      - 'src/ui/**'
+      - 'src/core/config.js'
+      - '.github/workflows/verify-apple-workspace.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-apple-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate existing app invariants
+        run: python tools/validate_app.py
+
+      - name: Validate enhancement JavaScript syntax
+        run: |
+          node --check src/core/config.js
+          node --check src/ui/apple-workspace.js
+
+      - name: Validate Apple workspace integration invariants
+        shell: python
+        run: |
+          from pathlib import Path
+          core = Path('src/core/config.js').read_text(encoding='utf-8')
+          ui = Path('src/ui/apple-workspace.js').read_text(encoding='utf-8')
+          css = Path('src/ui/apple-workspace.css').read_text(encoding='utf-8')
+          checks = {
+              'loader references CSS': '../ui/apple-workspace.css' in core,
+              'loader references JS': '../ui/apple-workspace.js' in core,
+              'four title maximum': 'MAX_TITLE_COUNT = 4' in ui,
+              'four-title route override': 'buildFourTitleRoutePrompt' in ui,
+              'segmented title selector': 'appleTitleSegmented' in ui and 'apple-title-segmented' in css,
+              'compact copy renderer': 'appleRenderOutput' in ui and 'apple-title-copy' in css,
+              'copy English shortcut': 'Copy English' in ui,
+              'profit dock fixed': 'position: fixed !important' in css and 'top: 50% !important' in css,
+              'calculator logic untouched by overlay': 'calcMargin' not in ui and 'calcRate' not in ui and 'recalcProfit' not in ui,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          for name, ok in checks.items():
+              print(('OK   ' if ok else 'FAIL ') + name)
+          if failed:
+              raise SystemExit('Apple workspace validation failed: ' + ', '.join(failed))
