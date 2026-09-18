@@ -93,6 +93,22 @@ jobs:
           npm install --global "pake-cli@$env:PAKE_VERSION"
           pake --version
 
+      - name: Lock installer identity and enable native updater
+        shell: pwsh
+        run: |
+          .\tools\Patch-PakeWindowsUpdater.ps1
+
+      - name: Stamp packaged app version
+        shell: pwsh
+        run: |
+          $path = '.\src\app.js'
+          $source = Get-Content $path -Raw
+          if (-not $source.Contains('__APP_VERSION__')) {
+            throw 'APP_RELEASE_VERSION placeholder was not found.'
+          }
+          $source = $source.Replace('__APP_VERSION__', $env:APP_VERSION)
+          Set-Content $path -Value $source -Encoding utf8
+
       - name: Generate Windows icon
         shell: pwsh
         run: |
@@ -168,24 +184,27 @@ jobs:
             if ($ext -eq '.exe') {
               $exeCount++
               $dest = if ($exeCount -eq 1) {
-                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64.exe"
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-Portable.exe"
               } else {
-                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-$exeCount.exe"
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-Portable-$exeCount.exe"
               }
               Copy-Item $source $dest -Force
             } elseif ($ext -eq '.msi') {
               $msiCount++
               $dest = if ($msiCount -eq 1) {
-                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64.msi"
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-Setup.msi"
               } else {
-                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-$msiCount.msi"
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-Setup-$msiCount.msi"
               }
               Copy-Item $source $dest -Force
             }
           }
 
           if ($exeCount -lt 1) {
-            throw 'Pake did not produce the expected standalone Windows EXE.'
+            throw 'Pake did not produce the expected portable Windows EXE.'
+          }
+          if ($msiCount -lt 1) {
+            throw 'Pake did not produce the required Windows MSI installer.'
           }
 
           Get-ChildItem .\release
