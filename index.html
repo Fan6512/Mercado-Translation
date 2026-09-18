@@ -238,6 +238,14 @@
       <button id="btnTranslate" class="px-5 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
         🚀 生成四语标题
       </button>
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <span>候选标题</span>
+        <select id="titleCount" class="px-2 py-2 text-sm bg-white border border-slate-300 rounded-lg" title="选择本次生成并显示的候选标题数量">
+          <option value="1">1 个</option>
+          <option value="2">2 个</option>
+          <option value="3">3 个</option>
+        </select>
+      </label>
       <button id="btnCancel" class="hidden px-4 py-2.5 bg-white border border-red-300 text-red-600 font-medium rounded-lg hover:bg-red-50" title="中止本次生成，已生成的部分会保留">✕ 取消</button>
       <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer select-none">
         <input type="checkbox" id="fastMode" class="w-4 h-4 accent-blue-600"/>
