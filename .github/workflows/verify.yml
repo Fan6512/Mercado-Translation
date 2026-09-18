@@ -6,20 +6,24 @@ on:
       - main
     paths:
       - 'index.html'
+      - 'src/**/*.js'
       - 'tailwind.min.css'
       - '启动翻译工具.bat'
       - '启动翻译工具(兼容模式).bat'
       - 'tools/validate_app.py'
+      - 'tools/tailwind-input.css'
       - '.github/workflows/verify.yml'
   push:
     branches:
-      - review/security-stability-v1
+      - main
     paths:
       - 'index.html'
+      - 'src/**/*.js'
       - 'tailwind.min.css'
       - '启动翻译工具.bat'
       - '启动翻译工具(兼容模式).bat'
       - 'tools/validate_app.py'
+      - 'tools/tailwind-input.css'
       - '.github/workflows/verify.yml'
 
 permissions:
