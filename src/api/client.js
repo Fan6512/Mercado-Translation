@@ -256,7 +256,6 @@ ${overItems.map(it => `  "${it.lang}": { "title": "...", "analysis": "保留了�
 
 // ===== 分路 Prompt =====
 // 在全局 Prompt 之后追加「本次输出范围」，收窄单次请求需要输出的语种，减少输出 token
-const LANG_EN_NAME = { en: 'English', es: 'Español', pt: 'Português', zh: '中文' };
 // ===== 运行控制（取消）=====
 // 同一时刻只允许一次生成；取消时 abort 掉所有在途请求，已渲染的部分结果保留。
 let activeRun = null;
