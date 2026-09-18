@@ -30,6 +30,7 @@
     </div>
     <div class="flex items-center gap-2">
       <select id="profileQuickSwitch" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100 cursor-pointer max-w-[200px]" title="快速切换 API 配置"></select>
+      <button id="btnCheckUpdate" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100 hidden" title="检查 GitHub Release 新版本">⬆️ 更新</button>
       <button id="btnHistory" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">📜 历史</button>
       <button id="btnSettings" class="px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">⚙️ 设置</button>
     </div>
@@ -330,6 +331,27 @@
   </aside>
 </div>
 <!-- /max-w-[1400px] flex 容器 -->
+
+<!-- 应用更新弹窗 -->
+<div id="updateDialog" class="hidden fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
+  <div class="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="font-semibold text-slate-900 text-lg">发现新版本</h2>
+        <p id="updateVersionText" class="text-sm text-slate-500 mt-1"></p>
+      </div>
+      <button id="btnCloseUpdate" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+    </div>
+    <p class="text-sm text-slate-600 mt-4 leading-relaxed">
+      点击升级后会自动下载官方 GitHub Release 的 MSI 安装包，启动覆盖安装并关闭当前程序。现有本地配置会继续保留。
+    </p>
+    <div id="updateProgress" class="hidden mt-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2"></div>
+    <div class="flex justify-end gap-2 mt-5">
+      <button id="btnLaterUpdate" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">稍后</button>
+      <button id="btnInstallUpdate" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">立即升级</button>
+    </div>
+  </div>
+</div>
 
 <!-- 历史抽屉 -->
 <div id="historyDrawer" class="hidden fixed inset-0 z-50 bg-black/40" onclick="if(event.target===this) toggleHistory()">

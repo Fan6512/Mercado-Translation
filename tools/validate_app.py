@@ -61,6 +61,10 @@ checks = {
     "route prompt supports title count": "function buildRoutePrompt(basePrompt, langs, titleCount = 1)" in translation and '"versions": [' in translation,
     "multi-title result compatibility present": "function getResultVersions(" in app and "function mergeRouteVersions(" in app,
     "multi-title history completeness guarded": "isCompleteTitleResult(result, record.titleCount ?? null)" in app,
+    "desktop updater UI present": 'id="btnCheckUpdate"' in index and 'id="updateDialog"' in index,
+    "desktop updater version placeholder present": "const APP_RELEASE_VERSION = '__APP_VERSION__';" in app,
+    "desktop updater checks GitHub releases": "RELEASE_LATEST_API" in app and "checkForDesktopUpdate" in app,
+    "desktop updater invokes native installer bridge": "download_and_install_update" in app,
 }
 
 failed = [name for name, ok in checks.items() if not ok]
