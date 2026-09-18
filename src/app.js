@@ -366,15 +366,6 @@ function showToast(msg, type = 'success', duration = 2200) {
 // opts: { temperature, maxTokens, messages, stream, signal, timeout, retry, onRetry }
 // 不传则用配置里的默认值；请求失败会按 429/5xx/网络错误自动重试（指数退避）
 // 去除 markdown 代码块包裹：```json\n{...}\n``` → {...}
-function stripCodeFence(text) {
-  if (!text) return text;
-  let t = text.trim();
-  // 去 ```json 或 ``` 开头
-  t = t.replace(/^```(?:json|JSON)?\s*\n?/, '');
-  // 去结尾的 ```
-  t = t.replace(/\n?```\s*$/, '');
-  return t.trim();
-}
 
 // ===== 用户确认压缩 =====
 const LANG_LABEL = { en: '英语', es: '西语', pt: '葡语', zh: '中文' };
@@ -502,7 +493,6 @@ ${overItems.map(it => `  "${it.lang}": { "title": "...", "analysis": "保留了�
 
 // ===== 分路 Prompt =====
 // 在全局 Prompt 之后追加「本次输出范围」，收窄单次请求需要输出的语种，减少输出 token
-const LANG_EN_NAME = { en: 'English', es: 'Español', pt: 'Português', zh: '中文' };
 // ===== 运行控制（取消）=====
 // 同一时刻只允许一次生成；取消时 abort 掉所有在途请求，已渲染的部分结果保留。
 let activeRun = null;
