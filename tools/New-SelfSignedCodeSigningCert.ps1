@@ -1,12 +1,32 @@
 [CmdletBinding()]
 param(
     [string]$Subject = 'CN=Mercado Translation',
-    [string]$PfxPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'Mercado-Translation-CodeSigning.pfx'),
-    [string]$CerPath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'Mercado-Translation-CodeSigning.cer'),
+    [string]$PfxPath = '',
+    [string]$CerPath = '',
     [int]$ValidYears = 5
 )
 
 $ErrorActionPreference = 'Stop'
+
+$scriptDir = $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($scriptDir) -and $MyInvocation.MyCommand.Path) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if ([string]::IsNullOrWhiteSpace($scriptDir)) {
+    $scriptDir = (Get-Location).Path
+}
+
+$repoRoot = Split-Path -Parent $scriptDir
+if ([string]::IsNullOrWhiteSpace($repoRoot)) {
+    $repoRoot = $scriptDir
+}
+
+if ([string]::IsNullOrWhiteSpace($PfxPath)) {
+    $PfxPath = Join-Path $repoRoot 'Mercado-Translation-CodeSigning.pfx'
+}
+if ([string]::IsNullOrWhiteSpace($CerPath)) {
+    $CerPath = Join-Path $repoRoot 'Mercado-Translation-CodeSigning.cer'
+}
 
 if ($ValidYears -lt 1 -or $ValidYears -gt 10) {
     throw 'ValidYears must be between 1 and 10.'
