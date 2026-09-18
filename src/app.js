@@ -520,11 +520,14 @@ function packResultVersions(versions, titleCount) {
 function mergeRouteVersions(targetVersions, part, titleCount) {
   const count = normalizeTitleCount(titleCount);
   const incoming = getResultVersions(part);
-  for (let i = 0; i < count; i++) {
-    const src = incoming[i];
-    if (!src) continue;
-    Object.assign(targetVersions[i], src);
-  }
+  incoming.forEach((src, fallbackIndex) => {
+    const declared = Number.parseInt(src.version, 10);
+    const index = Number.isInteger(declared) && declared >= 1 && declared <= count
+      ? declared - 1
+      : fallbackIndex;
+    if (index < 0 || index >= count) return;
+    Object.assign(targetVersions[index], src);
+  });
 }
 
 function listAllOverLimit(result, charLimit, charLimitCN, scope) {
@@ -535,9 +538,10 @@ function listAllOverLimit(result, charLimit, charLimitCN, scope) {
   );
 }
 
-function isCompleteTitleResult(result) {
+function isCompleteTitleResult(result, expectedCount = null) {
   const versions = getResultVersions(result);
-  return versions.length > 0 && versions.every(version =>
+  const expected = expectedCount == null ? versions.length : normalizeTitleCount(expectedCount);
+  return versions.length === expected && expected > 0 && versions.every(version =>
     ['en', 'es', 'pt', 'zh'].every(lang => version[lang]?.title)
   );
 }
@@ -663,13 +667,17 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
     // 最终渲染 + 校验字符数
     setStage('解析完成', '正在校验字符数');
     renderOutput(merged, input, charLimit, charLimitCN);
+    if (!isCompleteTitleResult(merged, titleCount)) {
+      showToast(`AI 返回结果不完整：需要 ${titleCount} 套四语标题，已保留当前可用结果，请重试`, 'error', 5000);
+      return;
+    }
 
     // 快速模式：跳过自动压缩
     const fastMode = document.getElementById('fastMode').checked;
     localStorage.setItem('translator_fast_mode', fastMode ? '1' : '0');
 
     if (fastMode) {
-      saveHistory({ input, sessionPrompt, result: merged, ts: Date.now() });
+      saveHistory({ input, sessionPrompt, titleCount, result: merged, ts: Date.now() });
     } else {
       // 取得当前压缩范围
       const profData = loadProfilesStore();
@@ -733,7 +741,7 @@ document.getElementById('btnTranslate').addEventListener('click', async () => {
         loading.classList.add('hidden');
       }
       if (isRunCancelled(run)) throw new Error('已取消');
-      saveHistory({ input, sessionPrompt, result: current, ts: Date.now() });
+      saveHistory({ input, sessionPrompt, titleCount, result: current, ts: Date.now() });
     }
 
     const totalSec = ((Date.now() - startTs) / 1000).toFixed(1);
@@ -858,7 +866,7 @@ function renderOutput(result, input, charLimit, charLimitCN) {
 // ===== 历史 =====
 function saveHistory(record) {
   const result = record && record.result;
-  const complete = !!result && isCompleteTitleResult(result);
+  const complete = !!result && isCompleteTitleResult(result, record.titleCount ?? null);
   if (!complete) {
     console.warn('[history] 跳过不完整结果，不写入历史记录');
     return false;
@@ -894,6 +902,9 @@ function renderHistory() {
       const h = hist[parseInt(el.dataset.i)];
       document.getElementById('inputTitle').value = h.input;
       document.getElementById('sessionPrompt').value = h.sessionPrompt || '';
+      if (h.titleCount) {
+        document.getElementById('titleCount').value = String(normalizeTitleCount(h.titleCount));
+      }
       const s = getSettings();
       renderOutput(h.result, h.input, s.charLimit ?? 55, s.charLimitCN ?? 60);
       toggleHistory();
