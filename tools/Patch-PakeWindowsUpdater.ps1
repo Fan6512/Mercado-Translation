@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$PakeRoot = '',
-    [string]$UpgradeCode = '1ffd51d4-30e3-5cb0-996c-b694974be021'
+    [string]$UpgradeCode = '18f5c230-146b-5d19-988a-6204008097ea'
 )
 
 $ErrorActionPreference = 'Stop'
