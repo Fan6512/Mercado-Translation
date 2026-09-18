@@ -107,7 +107,7 @@ jobs:
           $pakeRoot = Join-Path ((& npm root -g).Trim()) 'pake-cli'
           $configPath = Join-Path $pakeRoot 'src-tauri\tauri.windows.conf.json'
           $config = Get-Content $configPath -Raw | ConvertFrom-Json
-          if ($config.bundle.windows.wix.upgradeCode -ne '1ffd51d4-30e3-5cb0-996c-b694974be021') {
+          if ($config.bundle.windows.wix.upgradeCode -ne '18f5c230-146b-5d19-988a-6204008097ea') {
             throw 'Pinned MSI UpgradeCode was not applied.'
           }
 
