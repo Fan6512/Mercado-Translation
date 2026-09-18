@@ -4,12 +4,18 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (for example v1.2.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: windows-release-${{ github.ref }}
+  group: windows-release-${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref }}
   cancel-in-progress: false
 
 env:
@@ -23,26 +29,263 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout tagged source
+      - name: Checkout release source
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
           fetch-depth: 0
 
-      - name: Validate release tag
+      - name: Resolve release version
         shell: pwsh
         run: |
-          $tag = '${{ github.ref_name }}'
-          if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)$') {
-            throw "Release tags must use semantic versioning, for example v1.0.0."
+          $eventName = '${{ github.event_name }}'
+          $tag = if ($eventName -eq 'workflow_dispatch') {
+            '${{ inputs.version }}'.Trim()
+          } else {
+            '${{ github.ref_name }}'.Trim()
           }
+
+          if ($tag -notmatch '^v(\d+)\.(\d+)\.(\d+)
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare Rust
+        shell: pwsh
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Validate application
+        shell: pwsh
+        run: python tools/validate_app.py
+
+      - name: Install Pake
+        shell: pwsh
+        run: |
+          npm install --global "pake-cli@$env:PAKE_VERSION"
+          pake --version
+
+      - name: Generate Windows icon
+        shell: pwsh
+        run: |
+          $magick = Get-Command magick -ErrorAction SilentlyContinue
+          if ($magick) {
+            $magickExe = $magick.Source
+          } else {
+            choco install imagemagick.app -y --no-progress
+            $magickExe = Get-ChildItem 'C:\Program Files\ImageMagick-*\magick.exe' -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $magickExe -or -not (Test-Path $magickExe)) {
+            throw 'ImageMagick was not found after installation.'
+          }
+
+          & $magickExe -background none .\icon.svg -define icon:auto-resize=256,128,96,64,48,32,24,16 .\icon.ico
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path .\icon.ico)) {
+            throw 'Failed to generate icon.ico from icon.svg.'
+          }
+
+      - name: Build Windows x64 packages
+        shell: pwsh
+        run: |
+          $entry = (Resolve-Path .\index.html).Path
+          $icon = (Resolve-Path .\icon.ico).Path
+          $pakeArgs = @(
+            $entry,
+            '--name', $env:APP_NAME,
+            '--title', 'Mercado Translation',
+            '--identifier', $env:APP_IDENTIFIER,
+            '--icon', $icon,
+            '--width', '1400',
+            '--height', '900',
+            '--use-local-file',
+            '--targets', 'x64',
+            '--app-version', $env:APP_VERSION,
+            '--installer-language', 'zh-CN',
+            '--keep-binary',
+            '--json'
+          )
+
+          $raw = (& pake @pakeArgs 2> .\pake-build.log | Out-String).Trim()
+          $exit = $LASTEXITCODE
+          if ($exit -ne 0) {
+            if (Test-Path .\pake-build.log) { Get-Content .\pake-build.log }
+            throw "Pake failed with exit code $exit."
+          }
+
+          try {
+            $result = $raw | ConvertFrom-Json
+          } catch {
+            Write-Host $raw
+            if (Test-Path .\pake-build.log) { Get-Content .\pake-build.log }
+            throw 'Pake did not return valid JSON.'
+          }
+
+          if (-not $result.ok) {
+            $result | ConvertTo-Json -Depth 8
+            throw 'Pake reported a failed build.'
+          }
+
+          New-Item -ItemType Directory -Force -Path .\release | Out-Null
+          $exeCount = 0
+          $msiCount = 0
+          foreach ($output in $result.outputs) {
+            $source = [string]$output.path
+            if (-not (Test-Path $source)) {
+              throw "Pake output does not exist: $source"
+            }
+
+            $ext = [IO.Path]::GetExtension($source).ToLowerInvariant()
+            if ($ext -eq '.exe') {
+              $exeCount++
+              $dest = if ($exeCount -eq 1) {
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64.exe"
+              } else {
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-$exeCount.exe"
+              }
+              Copy-Item $source $dest -Force
+            } elseif ($ext -eq '.msi') {
+              $msiCount++
+              $dest = if ($msiCount -eq 1) {
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64.msi"
+              } else {
+                ".\release\Mercado-Translation-$env:RELEASE_TAG-Windows-x64-$msiCount.msi"
+              }
+              Copy-Item $source $dest -Force
+            }
+          }
+
+          if ($exeCount -lt 1) {
+            throw 'Pake did not produce the expected standalone Windows EXE.'
+          }
+
+          Get-ChildItem .\release
+
+      - name: Import self-signed code-signing certificate
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PFX_BASE64)) {
+            throw 'Missing repository secret WINDOWS_CERT_PFX_BASE64. See README -> 自动正式发布.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:PFX_PASSWORD)) {
+            throw 'Missing repository secret WINDOWS_CERT_PASSWORD. See README -> 自动正式发布.'
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'mercado-translation-codesign.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+
+          if (-not $cert -or -not $cert.HasPrivateKey) {
+            throw 'The imported code-signing certificate has no private key.'
+          }
+
+          "CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Export-Certificate -Cert $cert -FilePath .\release\Mercado-Translation-SelfSigned-Publisher.cer -Force | Out-Null
+
+      - name: Self-sign Windows packages
+        shell: pwsh
+        run: |
+          $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $signTool -or -not (Test-Path $signTool)) {
+            throw 'signtool.exe was not found on the Windows runner.'
+          }
+
+          $targets = Get-ChildItem .\release -File | Where-Object { $_.Extension -in '.exe', '.msi' }
+          foreach ($file in $targets) {
+            $signed = $false
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              & $signTool sign /fd SHA256 /sha1 $env:CERT_THUMBPRINT /tr http://timestamp.digicert.com /td SHA256 $file.FullName
+              if ($LASTEXITCODE -eq 0) {
+                $signed = $true
+                break
+              }
+              Start-Sleep -Seconds (2 * $attempt)
+            }
+            if (-not $signed) {
+              throw "Failed to sign $($file.Name)."
+            }
+
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if (-not $signature.SignerCertificate -or $signature.SignerCertificate.Thumbprint -ne $env:CERT_THUMBPRINT) {
+              throw "Signature verification failed for $($file.Name)."
+            }
+          }
+
+      - name: Generate SHA-256 checksums
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem .\release -File |
+            Where-Object { $_.Extension -in '.exe', '.msi', '.cer' } |
+            Sort-Object Name |
+            ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            }
+          $lines | Set-Content .\release\SHA256SUMS.txt -Encoding ascii
+          Get-Content .\release\SHA256SUMS.txt
+
+      - name: Publish formal GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = Get-ChildItem .\release -File | ForEach-Object { $_.FullName }
+          if (-not $assets) {
+            throw 'No release assets were generated.'
+          }
+
+          if ($env:MANUAL_RELEASE -eq 'True') {
+            $payload = @{
+              ref = "refs/tags/$env:RELEASE_TAG"
+              sha = $env:GITHUB_SHA
+            } | ConvertTo-Json -Compress
+
+            $payload | gh api "repos/${{ github.repository }}/git/refs" --method POST --input -
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to create tag $env:RELEASE_TAG."
+            }
+          }
+
+          $args = @(
+            'release', 'create', $env:RELEASE_TAG,
+            '--title', "Mercado Translation $env:RELEASE_TAG",
+            '--generate-notes',
+            '--verify-tag'
+          ) + $assets
+
+          & gh @args
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub Release creation failed.'
+          }
+) {
+            throw "Release versions must use semantic versioning, for example v1.0.0."
+          }
+
           $version = $tag.Substring(1)
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MANUAL_RELEASE=$($eventName -eq 'workflow_dispatch')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          git fetch origin main
-          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          git fetch origin main --tags
+          git merge-base --is-ancestor HEAD origin/main
           if ($LASTEXITCODE -ne 0) {
-            throw "The release tag must point to a commit contained in main."
+            throw "Release source must be contained in main."
+          }
+
+          $existing = git ls-remote --tags origin "refs/tags/$tag"
+          if ($eventName -eq 'workflow_dispatch' -and $existing) {
+            throw "Tag $tag already exists. Choose a new version."
           }
 
       - name: Setup Node.js
