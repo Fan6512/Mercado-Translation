@@ -16,16 +16,18 @@ Write-Host 'Creating a persistent self-signed Windows code-signing certificate.'
 Write-Host 'Use the same PFX for every release so the publisher identity stays stable.'
 $password = Read-Host 'Enter a strong password for the PFX' -AsSecureString
 
-$cert = New-SelfSignedCertificate \
-    -Type CodeSigningCert \
-    -Subject $Subject \
-    -FriendlyName 'Mercado Translation Code Signing' \
-    -CertStoreLocation 'Cert:\CurrentUser\My' \
-    -KeyAlgorithm RSA \
-    -KeyLength 3072 \
-    -HashAlgorithm SHA256 \
-    -KeyExportPolicy Exportable \
-    -NotAfter (Get-Date).AddYears($ValidYears)
+$certParams = @{
+    Type = 'CodeSigningCert'
+    Subject = $Subject
+    FriendlyName = 'Mercado Translation Code Signing'
+    CertStoreLocation = 'Cert:\CurrentUser\My'
+    KeyAlgorithm = 'RSA'
+    KeyLength = 3072
+    HashAlgorithm = 'SHA256'
+    KeyExportPolicy = 'Exportable'
+    NotAfter = (Get-Date).AddYears($ValidYears)
+}
+$cert = New-SelfSignedCertificate @certParams
 
 if (-not $cert -or -not $cert.HasPrivateKey) {
     throw 'Failed to create an exportable code-signing certificate.'
