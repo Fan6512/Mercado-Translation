@@ -49,7 +49,8 @@ jobs:
         run: python tools/validate_app.py
 
       - name: Validate release workflow YAML
-        run: ruby -e "require 'yaml'; YAML.safe_load(File.read('.github/workflows/release-windows.yml'), aliases: true)"
+        run: |
+          ruby -e "require 'yaml'; YAML.safe_load(File.read('.github/workflows/release-windows.yml'), aliases: true)"
 
       - name: Validate release helper PowerShell syntax
         shell: pwsh
