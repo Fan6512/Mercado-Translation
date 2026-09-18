@@ -112,3 +112,27 @@ function getSettings() {
     charLimitCN: active.charLimitCN ?? data.charLimitCN ?? 60,
   };
 }
+
+// ===== Apple-inspired workspace enhancement (branch preview) =====
+// Load as an additive presentation/runtime layer so the original modules stay intact and
+// this redesign can be disabled with a single revert if needed.
+(() => {
+  const current = document.currentScript?.src;
+  if (!current) return;
+
+  const cssHref = new URL('../ui/apple-workspace.css', current).href;
+  if (!document.querySelector(`link[href="${cssHref}"]`)) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = cssHref;
+    document.head.appendChild(link);
+  }
+
+  const scriptSrc = new URL('../ui/apple-workspace.js', current).href;
+  if (!document.querySelector(`script[src="${scriptSrc}"]`)) {
+    const script = document.createElement('script');
+    script.src = scriptSrc;
+    script.async = false;
+    document.head.appendChild(script);
+  }
+})();
