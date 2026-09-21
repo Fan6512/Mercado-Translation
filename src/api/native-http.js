@@ -123,15 +123,15 @@
       try {
         return await nativeRequest(url, init, timeoutMs, profile);
       } catch (err) {
-        // A packaged client with an old template may expose Tauri but not our command yet.
-        // Mark the error so callers can decide whether browser fallback is appropriate.
-        err.nativeTransportError = true;
-        if (options.nativeOnly === true) throw err;
+        // Tauri command rejections may arrive as strings rather than Error instances.
+        const nativeError = err instanceof Error ? err : new Error(String(err));
+        nativeError.nativeTransportError = true;
+        if (options.nativeOnly === true) throw nativeError;
         // Only fall back when the command itself is unavailable. Network/HTTP failures from
         // the native path should be surfaced/fallback at the provider layer, not reissued via CORS fetch.
-        const message = String(err?.message || err);
+        const message = String(nativeError.message || nativeError);
         const commandMissing = /native_http_request|unknown command|not found|does not exist/i.test(message);
-        if (!commandMissing) throw err;
+        if (!commandMissing) throw nativeError;
       }
     }
     return browserRequest(url, init, timeoutMs);
