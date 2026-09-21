@@ -34,12 +34,76 @@
     height: 100% !important;
   }
 
+  /*
+   * Typography and spacing are independent refinements:
+   * 1) enlarge the calculator text hierarchy;
+   * 2) make the body a vertical flex column so the formula note settles near
+   *    the resize handle instead of leaving a large empty block beneath it.
+   */
   body.apple-workspace #calcBody {
-    padding: 18px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    height: calc(100% - 45px) !important;
+    box-sizing: border-box !important;
+    padding: 16px 18px 11px !important;
+    font-size: 14px !important;
   }
 
   body.apple-workspace #floatingCalc > div:first-child {
+    min-height: 45px !important;
     padding-left: 18px !important;
     padding-right: 18px !important;
+  }
+
+  body.apple-workspace #floatingCalc > div:first-child .text-base {
+    font-size: 18px !important;
+  }
+
+  body.apple-workspace #floatingCalc > div:first-child .text-sm {
+    font-size: 15px !important;
+    font-weight: 600 !important;
+  }
+
+  body.apple-workspace #calcBody label {
+    font-size: 12.5px !important;
+    line-height: 1.35 !important;
+  }
+
+  body.apple-workspace #calcBody input {
+    font-size: 15px !important;
+    line-height: 1.35 !important;
+  }
+
+  body.apple-workspace #calcBody .grid .text-\[10px\] {
+    font-size: 11.5px !important;
+  }
+
+  body.apple-workspace #calcUsd,
+  body.apple-workspace #calcProfit {
+    font-size: 20px !important;
+    line-height: 1.2 !important;
+  }
+
+  body.apple-workspace #calcBody details > summary {
+    font-size: 12.5px !important;
+  }
+
+  body.apple-workspace #calcSummary {
+    font-size: 11px !important;
+  }
+
+  body.apple-workspace #btnSaveCalcParams {
+    font-size: 12.5px !important;
+  }
+
+  /* Keep the formula explanation close to the resize handle. */
+  body.apple-workspace #calcBody > p:last-child {
+    margin-top: auto !important;
+    margin-bottom: 0 !important;
+    padding-top: 8px !important;
+    padding-right: 30px !important;
+    padding-bottom: 1px !important;
+    font-size: 11.5px !important;
+    line-height: 1.55 !important;
   }
 }
