@@ -1,0 +1,164 @@
+name: Build Windows preview
+
+on:
+  pull_request:
+    paths:
+      - 'src/api/native-http.js'
+      - 'src/translation-preview-native-providers.js'
+      - 'src/ui/translation-native-status.js'
+      - 'src/core/config.js'
+      - 'tools/Patch-PakeWindowsUpdater.ps1'
+      - '.github/workflows/build-windows-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PAKE_VERSION: '3.16.3'
+  APP_NAME: 'Translator'
+  APP_IDENTIFIER: 'com.pake.translator'
+  PREVIEW_VERSION: '0.0.0'
+
+jobs:
+  build-preview:
+    name: Build unsigned Windows x64 preview
+    runs-on: windows-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout preview source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare Rust
+        shell: pwsh
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Validate application
+        shell: pwsh
+        run: python tools/validate_app.py
+
+      - name: Install pinned Pake
+        shell: pwsh
+        run: |
+          npm install --global "pake-cli@$env:PAKE_VERSION"
+          pake --version
+
+      - name: Patch Pake client template
+        shell: pwsh
+        run: .\tools\Patch-PakeWindowsUpdater.ps1
+
+      - name: Stamp preview app version
+        shell: pwsh
+        run: |
+          $path = '.\src\app.js'
+          $source = Get-Content $path -Raw
+          if (-not $source.Contains('__APP_VERSION__')) {
+            throw 'APP_RELEASE_VERSION placeholder was not found.'
+          }
+          $source = $source.Replace('__APP_VERSION__', $env:PREVIEW_VERSION)
+          Set-Content $path -Value $source -Encoding utf8
+
+      - name: Generate Windows icon
+        shell: pwsh
+        run: |
+          $magick = Get-Command magick -ErrorAction SilentlyContinue
+          if ($magick) {
+            $magickExe = $magick.Source
+          } else {
+            choco install imagemagick.app -y --no-progress
+            $magickExe = Get-ChildItem 'C:\Program Files\ImageMagick-*\magick.exe' -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $magickExe -or -not (Test-Path $magickExe)) {
+            throw 'ImageMagick was not found after installation.'
+          }
+          & $magickExe -background none .\icon.svg -define icon:auto-resize=256,128,96,64,48,32,24,16 .\icon.ico
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path .\icon.ico)) {
+            throw 'Failed to generate icon.ico from icon.svg.'
+          }
+
+      - name: Build Windows x64 preview packages
+        shell: pwsh
+        run: |
+          $entry = (Resolve-Path .\index.html).Path
+          $icon = (Resolve-Path .\icon.ico).Path
+          $pakeArgs = @(
+            $entry,
+            '--name', $env:APP_NAME,
+            '--title', 'Mercado Translation Preview',
+            '--identifier', $env:APP_IDENTIFIER,
+            '--icon', $icon,
+            '--width', '1400',
+            '--height', '900',
+            '--use-local-file',
+            '--targets', 'x64',
+            '--app-version', $env:PREVIEW_VERSION,
+            '--installer-language', 'zh-CN',
+            '--keep-binary',
+            '--json'
+          )
+
+          $raw = (& pake @pakeArgs 2> .\pake-preview-build.log | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            if (Test-Path .\pake-preview-build.log) { Get-Content .\pake-preview-build.log }
+            throw "Pake preview build failed with exit code $LASTEXITCODE."
+          }
+
+          try {
+            $result = $raw | ConvertFrom-Json
+          } catch {
+            Write-Host $raw
+            if (Test-Path .\pake-preview-build.log) { Get-Content .\pake-preview-build.log }
+            throw 'Pake preview build did not return valid JSON.'
+          }
+          if (-not $result.ok) {
+            $result | ConvertTo-Json -Depth 8
+            throw 'Pake reported a failed preview build.'
+          }
+
+          New-Item -ItemType Directory -Force -Path .\preview-release | Out-Null
+          $exeCount = 0
+          $msiCount = 0
+          foreach ($output in $result.outputs) {
+            $source = [string]$output.path
+            if (-not (Test-Path $source)) { throw "Pake preview output does not exist: $source" }
+            $ext = [IO.Path]::GetExtension($source).ToLowerInvariant()
+            if ($ext -eq '.exe') {
+              $exeCount++
+              Copy-Item $source ".\preview-release\Mercado-Translation-Preview-Windows-x64-Portable-$exeCount.exe" -Force
+            } elseif ($ext -eq '.msi') {
+              $msiCount++
+              Copy-Item $source ".\preview-release\Mercado-Translation-Preview-Windows-x64-Setup-$msiCount.msi" -Force
+            }
+          }
+          if ($exeCount -lt 1) { throw 'Pake preview did not produce a portable Windows EXE.' }
+          if ($msiCount -lt 1) { throw 'Pake preview did not produce a Windows MSI.' }
+
+          Get-ChildItem .\preview-release -File | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content .\preview-release\SHA256SUMS.txt -Encoding ascii
+          Get-Content .\preview-release\SHA256SUMS.txt
+
+      - name: Upload unsigned preview artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mercado-Translation-Windows-Preview-${{ github.event.pull_request.number || github.run_number }}
+          path: preview-release/*
+          if-no-files-found: error
+          retention-days: 7
