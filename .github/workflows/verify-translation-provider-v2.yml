@@ -6,6 +6,7 @@ on:
       - 'src/translation-provider-v2.js'
       - 'src/translation-preview-ui.js'
       - 'src/ui/translation-provider-v2.css'
+      - 'src/ui/apple-drawer-typography.css'
       - 'src/core/config.js'
       - 'src/api/native-http.js'
       - 'src/translation-preview-native-providers.js'
@@ -46,11 +47,14 @@ jobs:
           provider = Path('src/translation-provider-v2.js').read_text(encoding='utf-8')
           ui = Path('src/translation-preview-ui.js').read_text(encoding='utf-8')
           css = Path('src/ui/translation-provider-v2.css').read_text(encoding='utf-8')
+          typography = Path('src/ui/apple-drawer-typography.css').read_text(encoding='utf-8')
 
           checks = {
               'provider v2 script loaded': '../translation-provider-v2.js' in core,
               'provider v2 CSS loaded': '../ui/translation-provider-v2.css' in core,
-              'state CSS remains last': core.index('../ui/translation-provider-v2.css') < core.index('../ui/translation-preview-state.css'),
+              'shared drawer typography loaded': '../ui/apple-drawer-typography.css' in core,
+              'typography loads after drawer skin': core.index('../ui/translation-provider-v2.css') < core.index('../ui/apple-drawer-typography.css'),
+              'state CSS loads after typography': core.index('../ui/apple-drawer-typography.css') < core.index('../ui/translation-preview-state.css'),
               'Google Cloud official endpoint': 'translation.googleapis.com/language/translate/v2' in provider,
               'Google key uses request header': "'X-Goog-Api-Key': apiKey" in provider,
               'Google key is not query parameter': '?key=${encodeURIComponent(apiKey)}' not in provider,
@@ -64,6 +68,10 @@ jobs:
               'Google mode selector': "id=\"translationGoogleMode\"" in ui,
               'Microsoft mode selector': "id=\"translationMicrosoftMode\"" in ui,
               'five-tab layout': 'repeat(5, minmax(0, 1fr))' in css,
+              'drawer title typography shared': '--apple-drawer-title-size: 19px' in typography and '--apple-drawer-title-weight: 600' in typography,
+              'drawer section typography shared': '--apple-drawer-section-size: 16px' in typography and '--apple-drawer-section-weight: 600' in typography,
+              'drawer tabs typography shared': '--apple-drawer-tab-size: 12px' in typography and '--apple-drawer-tab-weight: 600' in typography,
+              'Prompt and Translation both targeted': '#promptPanel h2' in typography and '.translation-settings-header h2' in typography,
               'credential defaults empty': "cloudApiKey: ''" in ui and "azureKey: ''" in ui,
           }
           failed = [name for name, ok in checks.items() if not ok]
