@@ -246,10 +246,13 @@
       error.unconfigured = true;
       throw error;
     }
-    const url = `${GOOGLE_CLOUD_ENDPOINT}?key=${encodeURIComponent(apiKey)}`;
-    const resp = await request(url, {
+    const resp = await request(GOOGLE_CLOUD_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=UTF-8', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        Accept: 'application/json',
+        'X-Goog-Api-Key': apiKey,
+      },
       body: JSON.stringify({ q: String(text || ''), target: mapGoogleCloudLang(targetLang), format: 'text' }),
     }, settings, 'google-cloud');
     const data = await parseJsonResponse(resp, 'Google Cloud');
@@ -260,8 +263,10 @@
 
   function azureTranslateUrl(settings, targetLang) {
     const endpoint = String(settings?.microsoft?.azureEndpoint || AZURE_DEFAULT_ENDPOINT).trim().replace(/\/+$/, '');
+    const parsed = new URL(endpoint);
+    if (parsed.protocol !== 'https:') throw new Error('Azure Translator Endpoint 必须使用 HTTPS');
     const target = encodeURIComponent(mapAzureLang(targetLang));
-    if (/\.cognitiveservices\.azure\.com$/i.test(new URL(endpoint).hostname)) {
+    if (/\.cognitiveservices\.azure\.com$/i.test(parsed.hostname)) {
       return `${endpoint}/translator/text/v3.0/translate?api-version=3.0&to=${target}`;
     }
     return `${endpoint}/translate?api-version=3.0&to=${target}`;
@@ -276,7 +281,7 @@
     }
     let url;
     try { url = azureTranslateUrl(settings, targetLang); }
-    catch (_) { throw new Error('Azure Translator Endpoint 格式无效'); }
+    catch (error) { throw new Error(error?.message || 'Azure Translator Endpoint 格式无效'); }
     const headers = {
       'Content-Type': 'application/json; charset=UTF-8',
       Accept: 'application/json',
