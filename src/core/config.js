@@ -125,6 +125,7 @@ function getSettings() {
     '../ui/apple-profit-dock-tuning.css',
     '../ui/translation-preview.css',
     '../ui/translation-preview-state.css',
+    '../ui/apple-layering.css',
   ];
   for (const relativePath of cssFiles) {
     const href = new URL(relativePath, current).href;
