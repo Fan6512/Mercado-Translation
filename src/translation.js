@@ -24,7 +24,7 @@ function stripPromptComments(text) {
 const LANG_EN_NAME = { en: 'English', es: 'Español', pt: 'Português', zh: '中文' };
 
 function buildRoutePrompt(basePrompt, langs, titleCount = 1) {
-  const count = Math.min(3, Math.max(1, Number.parseInt(titleCount, 10) || 1));
+  const count = Math.min(4, Math.max(1, Number.parseInt(titleCount, 10) || 1));
   const pair = langs.map(l => {
     const needAnalysis = (l === 'es' || l === 'pt');
     return `    "${l}": { "title": "..."${needAnalysis ? ', "analysis": "..."' : ''} }`;
@@ -276,7 +276,7 @@ Return only valid JSON, no Markdown code fence and no extra text:
       </div>
       <div class="mt-5 pt-5 border-t border-slate-200">
         <h3 class="text-sm font-semibold text-slate-900">四语标题</h3>
-        <p class="text-xs text-slate-400 mt-0.5">候选标题可生成 1～3 套；现有每个语言结果卡片保留独立复制按钮。</p>
+        <p class="text-xs text-slate-400 mt-0.5">候选标题可生成 1～4 套；现有每个语言结果卡片保留独立复制按钮。</p>
       </div>`;
     section.insertBefore(descriptionBlock, titleActions);
 
