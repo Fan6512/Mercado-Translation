@@ -103,7 +103,7 @@ jobs:
               'translation credentials have empty defaults': "baidu: { appId: '', secret: '' }" in tui and "key: ''," in tui,
               'legacy preview intercepted without generator changes': "event.target?.closest?.('#btnGTTranslate')" in tui,
               'native bridge invokes dedicated command': "invoke('native_http_request'" in native,
-              'native bridge prefers packaged transport': 'isNativeAvailable()' in native and "transport: 'native'" in native,
+              'native bridge prefers packaged transport': 'isNativeAvailable()' in native and "responseFacade(payload, 'native')" in native,
               'native bridge explicit profile proxy': 'proxyUrl' in native and 'useSystemProxy' in native,
               'native provider browser compatibility fallback': 'return legacy.translate(provider, text, targetLang, settings)' in tpn,
               'native provider covers all four sources': all(x in tpn for x in ['googleTranslate', 'microsoftTranslate', 'baiduTranslate', 'aiTranslate']),
