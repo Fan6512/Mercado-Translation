@@ -8,22 +8,13 @@
     padding-right: 366px !important;
   }
 
-  /*
-   * apple-shell is capped at 1500px and centered.
-   * This positions the calculator immediately to the right of the main content,
-   * instead of pinning it to the browser edge.
-   */
+  /* Keep the calculator beside the main content instead of the browser edge. */
   body.apple-workspace .apple-profit-dock {
     width: 330px !important;
     right: max(18px, calc((100vw - 1500px) / 2 + 18px)) !important;
   }
 
-  /*
-   * The calculator has an intermediate sticky wrapper between the aside and
-   * #floatingCalc. Give that wrapper an explicit percentage height so the
-   * proportional resize can flow through all three layers:
-   * aside -> sticky wrapper -> floating calculator.
-   */
+  /* Preserve the proportional size through the wrapper chain. */
   body.apple-workspace .apple-profit-inner {
     width: 100% !important;
     height: 100% !important;
@@ -35,18 +26,28 @@
   }
 
   /*
-   * Typography and spacing are independent refinements:
-   * 1) enlarge the calculator text hierarchy;
-   * 2) make the body a vertical flex column so the formula note settles near
-   *    the resize handle instead of leaving a large empty block beneath it.
+   * Overall vertical layout:
+   * title bar -> purchase cost -> result cards -> fixed params -> formula note.
+   * Do not pin one block to the bottom; distribute spare room across the whole
+   * body so no single oversized blank band appears.
    */
   body.apple-workspace #calcBody {
     display: flex !important;
     flex-direction: column !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
     height: calc(100% - 45px) !important;
     box-sizing: border-box !important;
-    padding: 16px 18px 11px !important;
+    padding: 13px 18px 11px !important;
     font-size: 14px !important;
+  }
+
+  body.apple-workspace #calcBody > div,
+  body.apple-workspace #calcBody > details,
+  body.apple-workspace #calcBody > p {
+    flex: 0 0 auto !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
   }
 
   body.apple-workspace #floatingCalc > div:first-child {
@@ -70,8 +71,17 @@
   }
 
   body.apple-workspace #calcBody input {
+    min-height: 40px !important;
     font-size: 15px !important;
     line-height: 1.35 !important;
+  }
+
+  body.apple-workspace #calcBody > .grid {
+    gap: 10px !important;
+  }
+
+  body.apple-workspace #calcBody > .grid > div {
+    padding: 11px 12px !important;
   }
 
   body.apple-workspace #calcBody .grid .text-\[10px\] {
@@ -85,6 +95,8 @@
   }
 
   body.apple-workspace #calcBody details > summary {
+    min-height: 32px !important;
+    box-sizing: border-box !important;
     font-size: 12.5px !important;
   }
 
@@ -96,14 +108,11 @@
     font-size: 12.5px !important;
   }
 
-  /* Keep the formula explanation close to the resize handle. */
   body.apple-workspace #calcBody > p:last-child {
-    margin-top: auto !important;
-    margin-bottom: 0 !important;
-    padding-top: 8px !important;
+    padding-top: 1px !important;
     padding-right: 30px !important;
-    padding-bottom: 1px !important;
+    padding-bottom: 0 !important;
     font-size: 11.5px !important;
-    line-height: 1.55 !important;
+    line-height: 1.5 !important;
   }
 }
