@@ -10,12 +10,28 @@
 
   /*
    * apple-shell is capped at 1500px and centered.
-   * This positions the 330px calculator 18px to the right of the main content,
+   * This positions the calculator immediately to the right of the main content,
    * instead of pinning it to the browser edge.
    */
   body.apple-workspace .apple-profit-dock {
     width: 330px !important;
     right: max(18px, calc((100vw - 1500px) / 2 + 18px)) !important;
+  }
+
+  /*
+   * The calculator has an intermediate sticky wrapper between the aside and
+   * #floatingCalc. Give that wrapper an explicit percentage height so the
+   * proportional resize can flow through all three layers:
+   * aside -> sticky wrapper -> floating calculator.
+   */
+  body.apple-workspace .apple-profit-inner {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  body.apple-workspace #floatingCalc {
+    width: 100% !important;
+    height: 100% !important;
   }
 
   body.apple-workspace #calcBody {
