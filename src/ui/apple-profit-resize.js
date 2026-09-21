@@ -2,7 +2,7 @@
   'use strict';
 
   const BASE_WIDTH = 340;
-  const BASE_HEIGHT = 425;
+  const BASE_HEIGHT = 340;
   const MIN_SCALE = 0.9;
   const MAX_SCALE = 1.4;
   const EDGE_GAP = 16;
