@@ -1,0 +1,29 @@
+/* Profit calculator placement refinement.
+   Presentation only: keep all existing calculator formulas, inputs, persistence,
+   minimize/restore handlers, and runtime behavior untouched. */
+
+@media (min-width: 1200px) {
+  /* Reserve a rail immediately beside the centered main workspace. */
+  body.apple-workspace .apple-shell {
+    padding-right: 366px !important;
+  }
+
+  /*
+   * apple-shell is capped at 1500px and centered.
+   * This positions the 330px calculator 18px to the right of the main content,
+   * instead of pinning it to the browser edge.
+   */
+  body.apple-workspace .apple-profit-dock {
+    width: 330px !important;
+    right: max(18px, calc((100vw - 1500px) / 2 + 18px)) !important;
+  }
+
+  body.apple-workspace #calcBody {
+    padding: 18px !important;
+  }
+
+  body.apple-workspace #floatingCalc > div:first-child {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+}
