@@ -130,10 +130,12 @@ function getSettings() {
     document.head.appendChild(link);
   }
 
-  const scriptSrc = new URL('../ui/apple-workspace.js', current).href;
-  if (!document.querySelector(`script[src="${scriptSrc}"]`)) {
+  const scriptFiles = ['../ui/apple-workspace.js', '../ui/apple-profit-resize.js'];
+  for (const relativePath of scriptFiles) {
+    const src = new URL(relativePath, current).href;
+    if (document.querySelector(`script[src="${src}"]`)) continue;
     const script = document.createElement('script');
-    script.src = scriptSrc;
+    script.src = src;
     script.async = false;
     document.head.appendChild(script);
   }
