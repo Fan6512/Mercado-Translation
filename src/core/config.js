@@ -138,8 +138,11 @@ function getSettings() {
   const scriptFiles = [
     '../ui/apple-workspace.js',
     '../ui/apple-profit-resize.js',
+    '../api/native-http.js',
     '../translation-preview-providers.js',
+    '../translation-preview-native-providers.js',
     '../translation-preview-ui.js',
+    '../ui/translation-native-status.js',
   ];
   for (const relativePath of scriptFiles) {
     const src = new URL(relativePath, current).href;
