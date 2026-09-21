@@ -141,6 +141,7 @@ function getSettings() {
     '../api/native-http.js',
     '../translation-preview-providers.js',
     '../translation-preview-native-providers.js',
+    '../translation-provider-v2.js',
     '../translation-preview-ui.js',
     '../ui/translation-native-status.js',
   ];
