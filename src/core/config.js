@@ -120,11 +120,13 @@ function getSettings() {
   const current = document.currentScript?.src;
   if (!current) return;
 
-  const cssHref = new URL('../ui/apple-workspace.css', current).href;
-  if (!document.querySelector(`link[href="${cssHref}"]`)) {
+  const cssFiles = ['../ui/apple-workspace.css', '../ui/apple-profit-dock-tuning.css'];
+  for (const relativePath of cssFiles) {
+    const href = new URL(relativePath, current).href;
+    if (document.querySelector(`link[href="${href}"]`)) continue;
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = cssHref;
+    link.href = href;
     document.head.appendChild(link);
   }
 
