@@ -4,8 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/ui/**'
+      - 'src/api/**'
       - 'src/translation-preview-*.js'
       - 'src/core/config.js'
+      - 'tools/Patch-PakeWindowsUpdater.ps1'
       - '.github/workflows/verify-apple-workspace.yml'
   workflow_dispatch:
 
@@ -32,8 +34,11 @@ jobs:
           node --check src/core/config.js
           node --check src/ui/apple-workspace.js
           node --check src/ui/apple-profit-resize.js
+          node --check src/api/native-http.js
           node --check src/translation-preview-providers.js
+          node --check src/translation-preview-native-providers.js
           node --check src/translation-preview-ui.js
+          node --check src/ui/translation-native-status.js
 
       - name: Validate Baidu MD5 signature primitive
         run: |
@@ -55,15 +60,22 @@ jobs:
           resize = Path('src/ui/apple-profit-resize.js').read_text(encoding='utf-8')
           css = Path('src/ui/apple-workspace.css').read_text(encoding='utf-8')
           tuning = Path('src/ui/apple-profit-dock-tuning.css').read_text(encoding='utf-8')
+          native = Path('src/api/native-http.js').read_text(encoding='utf-8')
           tp = Path('src/translation-preview-providers.js').read_text(encoding='utf-8')
+          tpn = Path('src/translation-preview-native-providers.js').read_text(encoding='utf-8')
           tui = Path('src/translation-preview-ui.js').read_text(encoding='utf-8')
+          tstatus = Path('src/ui/translation-native-status.js').read_text(encoding='utf-8')
           tcss = Path('src/ui/translation-preview.css').read_text(encoding='utf-8')
+          pake_patch = Path('tools/Patch-PakeWindowsUpdater.ps1').read_text(encoding='utf-8')
           checks = {
               'loader references CSS': '../ui/apple-workspace.css' in core,
               'loader references JS': '../ui/apple-workspace.js' in core,
               'loader references calculator resizer': '../ui/apple-profit-resize.js' in core,
+              'loader references native HTTP transport': '../api/native-http.js' in core,
               'loader references translation provider': '../translation-preview-providers.js' in core,
+              'loader references native provider overlay': '../translation-preview-native-providers.js' in core,
               'loader references translation UI': '../translation-preview-ui.js' in core,
+              'loader references translation network status': '../ui/translation-native-status.js' in core,
               'loader references translation CSS': '../ui/translation-preview.css' in core,
               'four title maximum': 'MAX_TITLE_COUNT = 4' in ui,
               'four-title route override': 'buildFourTitleRoutePrompt' in ui,
@@ -90,6 +102,18 @@ jobs:
               'translation drawer scroll isolated': 'min-height: 0' in tcss and 'overflow-y: auto' in tcss,
               'translation credentials have empty defaults': "baidu: { appId: '', secret: '' }" in tui and "key: ''," in tui,
               'legacy preview intercepted without generator changes': "event.target?.closest?.('#btnGTTranslate')" in tui,
+              'native bridge invokes dedicated command': "invoke('native_http_request'" in native,
+              'native bridge prefers packaged transport': 'isNativeAvailable()' in native and "transport: 'native'" in native,
+              'native bridge explicit profile proxy': 'proxyUrl' in native and 'useSystemProxy' in native,
+              'native provider browser compatibility fallback': 'return legacy.translate(provider, text, targetLang, settings)' in tpn,
+              'native provider covers all four sources': all(x in tpn for x in ['googleTranslate', 'microsoftTranslate', 'baiduTranslate', 'aiTranslate']),
+              'native network status visible in settings': 'translationNativeNetworkCard' in tstatus,
+              'Pake patch defines native HTTP command': 'pub async fn native_http_request' in pake_patch,
+              'Pake native HTTP methods constrained': 'only allows GET and POST' in pake_patch,
+              'Pake native HTTP protocols constrained': 'only allows http:// or https:// URLs' in pake_patch,
+              'Pake native HTTP body bounded': 'MAX_NATIVE_HTTP_REQUEST_BODY_BYTES' in pake_patch and 'MAX_NATIVE_HTTP_RESPONSE_BODY_BYTES' in pake_patch,
+              'Pake native HTTP unsafe headers blocked': 'proxy-authorization' in pake_patch and 'content-length' in pake_patch,
+              'Pake native HTTP registered': "@('download_and_install_update', 'native_http_request')" in pake_patch,
           }
           failed = [name for name, ok in checks.items() if not ok]
           for name, ok in checks.items():
