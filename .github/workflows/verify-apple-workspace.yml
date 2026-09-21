@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/ui/**'
+      - 'src/translation-preview-*.js'
       - 'src/core/config.js'
       - '.github/workflows/verify-apple-workspace.yml'
   workflow_dispatch:
@@ -31,6 +32,19 @@ jobs:
           node --check src/core/config.js
           node --check src/ui/apple-workspace.js
           node --check src/ui/apple-profit-resize.js
+          node --check src/translation-preview-providers.js
+          node --check src/translation-preview-ui.js
+
+      - name: Validate Baidu MD5 signature primitive
+        run: |
+          node - <<'NODE'
+          global.window = global;
+          require('./src/translation-preview-providers.js');
+          const actual = global.TranslationPreviewProviders.md5('abc');
+          const expected = '900150983cd24fb0d6963f7d28e17f72';
+          if (actual !== expected) throw new Error(`MD5 mismatch: ${actual}`);
+          console.log('OK   Baidu MD5 known vector');
+          NODE
 
       - name: Validate Apple workspace integration invariants
         shell: python
@@ -41,10 +55,16 @@ jobs:
           resize = Path('src/ui/apple-profit-resize.js').read_text(encoding='utf-8')
           css = Path('src/ui/apple-workspace.css').read_text(encoding='utf-8')
           tuning = Path('src/ui/apple-profit-dock-tuning.css').read_text(encoding='utf-8')
+          tp = Path('src/translation-preview-providers.js').read_text(encoding='utf-8')
+          tui = Path('src/translation-preview-ui.js').read_text(encoding='utf-8')
+          tcss = Path('src/ui/translation-preview.css').read_text(encoding='utf-8')
           checks = {
               'loader references CSS': '../ui/apple-workspace.css' in core,
               'loader references JS': '../ui/apple-workspace.js' in core,
               'loader references calculator resizer': '../ui/apple-profit-resize.js' in core,
+              'loader references translation provider': '../translation-preview-providers.js' in core,
+              'loader references translation UI': '../translation-preview-ui.js' in core,
+              'loader references translation CSS': '../ui/translation-preview.css' in core,
               'four title maximum': 'MAX_TITLE_COUNT = 4' in ui,
               'four-title route override': 'buildFourTitleRoutePrompt' in ui,
               'segmented title selector': 'appleTitleSegmented' in ui and 'apple-title-segmented' in css,
@@ -60,6 +80,16 @@ jobs:
               'calculator resize double-click reset': "handle.addEventListener('dblclick'" in resize and 'resetSize()' in resize,
               'calculator business formulas not duplicated': 'recalcProfit' not in resize and 'calcMargin' not in resize and 'calcRate' not in resize,
               'calculator spacing balanced globally': 'justify-content: space-between !important' in tuning and 'margin-top: auto' not in tuning,
+              'translation providers include all sources': all(x in tp for x in ['googleTranslate', 'microsoftTranslate', 'baiduTranslate', 'aiTranslate']),
+              'Microsoft keyless chain present': 'www.bing.com/translator' in tp and 'ttranslatev3' in tp,
+              'Baidu official endpoint present': 'fanyi-api.baidu.com/api/trans/vip/translate' in tp,
+              'AI translation prompt variables': all(x in tui for x in ['{{text}}', '{{from}}', '{{to}}']),
+              'translation source selector': "source.id = 'gtProvider'" in tui,
+              'translation settings button': "settingsButton.id = 'btnTranslationSettings'" in tui,
+              'translation controls are horizontal': 'flex-wrap: nowrap !important' in tcss,
+              'translation drawer scroll isolated': 'min-height: 0' in tcss and 'overflow-y: auto' in tcss,
+              'translation credentials have empty defaults': "baidu: { appId: '', secret: '' }" in tui and "key: ''," in tui,
+              'legacy preview intercepted without generator changes': "event.target?.closest?.('#btnGTTranslate')" in tui,
           }
           failed = [name for name, ok in checks.items() if not ok]
           for name, ok in checks.items():
