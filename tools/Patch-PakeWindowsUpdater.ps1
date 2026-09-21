@@ -135,6 +135,7 @@ pub async fn download_and_install_update(
 
 # 3) Add a narrow native HTTP bridge for client-first translation/network calls.
 #    It deliberately exposes less surface area than a generic reqwest wrapper:
+#    - bundled local app origin only
 #    - GET/POST only; HTTP/HTTPS only
 #    - bounded timeout, headers, request body, response body and redirects
 #    - no Cookie/Host/hop-by-hop/proxy-auth header injection
@@ -173,10 +174,29 @@ pub struct NativeHttpResponse {
     body: String,
 }
 
+fn ensure_local_native_http_invoker(window: &WebviewWindow) -> Result<(), String> {
+    let caller = window
+        .url()
+        .map_err(|e| format!("Unable to resolve native HTTP caller URL: {e}"))?;
+    let allowed = matches!(
+        (caller.scheme(), caller.host_str()),
+        ("http", Some("tauri.localhost"))
+            | ("https", Some("tauri.localhost"))
+            | ("tauri", Some("localhost"))
+    );
+    if !allowed {
+        return Err("Native HTTP is only available to the bundled local application.".into());
+    }
+    Ok(())
+}
+
 #[command]
 pub async fn native_http_request(
+    window: WebviewWindow,
     params: NativeHttpRequestParams,
 ) -> Result<NativeHttpResponse, String> {
+    ensure_local_native_http_invoker(&window)?;
+
     let url = Url::from_str(params.url.trim())
         .map_err(|e| format!("Invalid native HTTP URL: {e}"))?;
     if !matches!(url.scheme(), "http" | "https") {
