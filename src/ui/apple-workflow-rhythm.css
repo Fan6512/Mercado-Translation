@@ -1,0 +1,115 @@
+/* Product workflow rhythm.
+   Separate English description and multilingual title generation into two readable task zones
+   without changing business logic or moving controls out of their existing runtime containers. */
+
+body.apple-workspace .apple-description-task {
+  margin-top: 28px !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+/* Shared task headings. */
+body.apple-workspace .apple-description-task > div:first-child,
+body.apple-workspace .apple-description-task > div:last-child {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+body.apple-workspace .apple-description-task > div:first-child {
+  margin-bottom: 14px !important;
+}
+
+body.apple-workspace .apple-description-task > div:first-child h3,
+body.apple-workspace .apple-description-task > div:last-child h3 {
+  margin: 0 !important;
+  color: var(--apple-text, #1d1d1f) !important;
+  font-size: 16px !important;
+  line-height: 1.3 !important;
+  font-weight: 600 !important;
+  letter-spacing: -.01em !important;
+}
+
+body.apple-workspace .apple-description-task > div:first-child p,
+body.apple-workspace .apple-description-task > div:last-child p {
+  margin-top: 5px !important;
+  color: var(--apple-muted, #6e6e73) !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+
+/* English-description action zone. */
+body.apple-workspace .apple-description-task > div:nth-child(2) {
+  min-height: 58px;
+  box-sizing: border-box;
+  padding: 9px 12px !important;
+  gap: 10px !important;
+  border: 1px solid rgba(0,0,0,.055);
+  border-radius: 14px;
+  background: rgba(250,250,252,.84);
+}
+
+body.apple-workspace #btnGenerateDescription,
+body.apple-workspace #btnCancelDescription {
+  min-height: 40px !important;
+}
+
+body.apple-workspace #descriptionLoadingHint {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+body.apple-workspace #descriptionResult {
+  margin-top: 16px !important;
+}
+
+/* Four-language title starts as a distinct second task, not another line in the same block. */
+body.apple-workspace .apple-description-task > div:last-child {
+  margin-top: 30px !important;
+  padding-top: 24px !important;
+  border-top: 1px solid rgba(0,0,0,.075) !important;
+}
+
+body.apple-workspace .apple-title-actions {
+  margin-top: 14px !important;
+  padding: 12px 14px !important;
+  gap: 12px !important;
+  row-gap: 10px !important;
+  border: 1px solid rgba(0,0,0,.055);
+  border-radius: 14px;
+  background: rgba(250,250,252,.84);
+}
+
+body.apple-workspace .apple-title-actions #btnTranslate,
+body.apple-workspace .apple-title-actions #btnCancel {
+  min-height: 40px !important;
+}
+
+body.apple-workspace .apple-title-actions .apple-title-count-control {
+  min-height: 40px;
+}
+
+body.apple-workspace .apple-title-actions #loadingHint,
+body.apple-workspace .apple-title-actions #errorHint {
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+@media (max-width: 720px) {
+  body.apple-workspace .apple-description-task {
+    margin-top: 24px !important;
+  }
+
+  body.apple-workspace .apple-description-task > div:last-child {
+    margin-top: 25px !important;
+    padding-top: 21px !important;
+  }
+
+  body.apple-workspace .apple-description-task > div:nth-child(2),
+  body.apple-workspace .apple-title-actions {
+    padding: 11px 12px !important;
+  }
+
+  body.apple-workspace .apple-title-actions > label:last-of-type {
+    flex-basis: 100%;
+  }
+}
