@@ -5,7 +5,11 @@ on:
     paths:
       - 'src/api/native-http.js'
       - 'src/translation-preview-native-providers.js'
+      - 'src/translation-provider-v2.js'
+      - 'src/translation-preview-ui.js'
       - 'src/ui/translation-native-status.js'
+      - 'src/ui/translation-provider-v2.css'
+      - 'src/ui/apple-layering.css'
       - 'src/core/config.js'
       - 'tools/Patch-PakeWindowsUpdater.ps1'
       - '.github/workflows/build-windows-preview.yml'
