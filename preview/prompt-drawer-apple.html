@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Drawer Preview</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f5f5f7;
+    --panel: rgba(255,255,255,.92);
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --line: rgba(0,0,0,.08);
+    --blue: #0071e3;
+    --blue-hover: #0077ed;
+    --chip: #ececef;
+    --shadow: 0 24px 70px rgba(0,0,0,.18), 0 2px 12px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  button, textarea { font: inherit; }
+  .app {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 30px 28px 80px;
+  }
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 28px;
+  }
+  .title h1 { margin: 0; font-size: 28px; letter-spacing: -.5px; }
+  .title p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .toolbar-btn {
+    height: 38px;
+    border: 1px solid rgba(0,0,0,.10);
+    background: rgba(255,255,255,.85);
+    color: #333336;
+    border-radius: 10px;
+    padding: 0 13px;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    transition: .18s ease;
+  }
+  .toolbar-btn:hover { background: #fff; border-color: rgba(0,0,0,.16); }
+  .toolbar-btn.active {
+    background: #eaf3ff;
+    color: #0066cc;
+    border-color: #b8d7fb;
+  }
+  .workspace {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.03);
+  }
+  .workspace h2 { margin: 0 0 4px; font-size: 18px; }
+  .workspace p { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+  .fake-field {
+    height: 130px;
+    border-radius: 14px;
+    border: 1px solid #dedee3;
+    background: #fbfbfd;
+    margin-bottom: 14px;
+  }
+  .fake-field.small { height: 72px; }
+
+  .scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.08);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease;
+  }
+  .scrim.show { opacity: 1; pointer-events: auto; }
+
+  .drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(560px, 100vw);
+    height: 100vh;
+    background: var(--panel);
+    backdrop-filter: saturate(180%) blur(22px);
+    -webkit-backdrop-filter: saturate(180%) blur(22px);
+    border-left: 1px solid rgba(0,0,0,.08);
+    box-shadow: var(--shadow);
+    transform: translateX(102%);
+    transition: transform .28s cubic-bezier(.22,.61,.36,1);
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+  }
+  .drawer.open { transform: translateX(0); }
+
+  .drawer-head {
+    padding: 22px 24px 16px;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    background: rgba(250,250,252,.84);
+  }
+  .head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .drawer-head h2 { margin: 0; font-size: 21px; letter-spacing: -.25px; }
+  .drawer-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+  .close {
+    width: 30px; height: 30px; border: 0; border-radius: 50%;
+    background: #e9e9ed; color: #5b5b60; cursor: pointer;
+    display: grid; place-items: center; font-size: 14px;
+    transition: .15s ease;
+  }
+  .close:hover { background: #dedee3; color: #1d1d1f; }
+
+  .segmented {
+    margin-top: 18px;
+    background: #e9e9ed;
+    border-radius: 12px;
+    padding: 3px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    position: relative;
+  }
+  .segment {
+    position: relative;
+    z-index: 2;
+    border: 0;
+    background: transparent;
+    color: #66666b;
+    height: 38px;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: color .18s ease;
+  }
+  .segment.active { color: #1d1d1f; }
+  .segment-pill {
+    position: absolute;
+    z-index: 1;
+    top: 3px; bottom: 3px; left: 3px;
+    width: calc(50% - 3px);
+    border-radius: 9px;
+    background: rgba(255,255,255,.97);
+    box-shadow: 0 1px 4px rgba(0,0,0,.14), 0 0 0 .5px rgba(0,0,0,.05);
+    transition: transform .24s cubic-bezier(.22,.61,.36,1);
+  }
+  .segmented[data-tab="description"] .segment-pill { transform: translateX(100%); }
+
+  .drawer-body {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+  }
+  .pane {
+    animation: paneIn .18s ease both;
+  }
+  @keyframes paneIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .eyebrow {
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .1px;
+    margin-bottom: 5px;
+  }
+  .pane-title { margin: 0; font-size: 20px; letter-spacing: -.25px; }
+  .pane-desc { margin: 7px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .rule-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+  .rule-tag {
+    background: #f0f0f3;
+    color: #67676c;
+    border-radius: 999px;
+    padding: 5px 9px;
+    font-size: 11px;
+  }
+  .editor-wrap {
+    background: #fff;
+    border: 1px solid #d8d8dd;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.02);
+    transition: border-color .16s ease, box-shadow .16s ease;
+  }
+  .editor-wrap:focus-within {
+    border-color: #7bb7f5;
+    box-shadow: 0 0 0 4px rgba(0,113,227,.10);
+  }
+  .editor-top {
+    height: 34px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #ededf0;
+    color: #8a8a8f;
+    font-size: 11px;
+    background: #fbfbfd;
+  }
+  textarea {
+    width: 100%;
+    min-height: 430px;
+    resize: vertical;
+    border: 0;
+    outline: 0;
+    padding: 15px 16px 20px;
+    color: #27272a;
+    background: #fff;
+    font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  .drawer-foot {
+    border-top: 1px solid rgba(0,0,0,.07);
+    background: rgba(250,250,252,.90);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    padding: 13px 24px 16px;
+  }
+  .foot-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .save-state { color: #85858a; font-size: 11px; }
+  .foot-actions { display: flex; gap: 8px; }
+  .btn {
+    height: 36px;
+    border-radius: 9px;
+    padding: 0 14px;
+    border: 0;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: .16s ease;
+  }
+  .btn.secondary { background: #ededf0; color: #4e4e53; }
+  .btn.secondary:hover { background: #e2e2e7; }
+  .btn.primary { background: var(--blue); color: #fff; min-width: 88px; }
+  .btn.primary:hover { background: var(--blue-hover); }
+  .btn.primary:active { transform: scale(.98); }
+
+  @media (max-width: 760px) {
+    .actions .toolbar-btn:not(.active) { display: none; }
+    .app { padding: 18px 14px; }
+    .drawer { width: 100vw; }
+    .drawer-head, .drawer-body, .drawer-foot { padding-left: 18px; padding-right: 18px; }
+    textarea { min-height: 48vh; }
+  }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="toolbar">
+      <div class="title">
+        <h1>跨境电商 Listing 助手</h1>
+        <p>产品资料 → 英文产品描述 → 四语标题</p>
+      </div>
+      <div class="actions">
+        <button class="toolbar-btn">默认配置⌄</button>
+        <button id="openPrompt" class="toolbar-btn active">Prompt</button>
+        <button class="toolbar-btn">历史</button>
+        <button class="toolbar-btn">设置</button>
+      </div>
+    </div>
+
+    <section class="workspace">
+      <h2>产品资料</h2>
+      <p>主工作区保持轻量，Prompt 规则不长期占据页面。</p>
+      <div class="fake-field"></div>
+      <div class="fake-field small"></div>
+      <div class="fake-field small"></div>
+    </section>
+  </main>
+
+  <div id="scrim" class="scrim show"></div>
+  <aside id="drawer" class="drawer open" aria-label="Prompt 设置">
+    <div class="drawer-head">
+      <div class="head-row">
+        <div>
+          <h2>Prompt 设置</h2>
+          <p>管理标题与产品描述生成规则</p>
+        </div>
+        <button id="closePrompt" class="close" title="收起">×</button>
+      </div>
+
+      <div id="segmented" class="segmented" data-tab="title">
+        <div class="segment-pill"></div>
+        <button class="segment active" data-tab="title">标题 Prompt</button>
+        <button class="segment" data-tab="description">产品描述 Prompt</button>
+      </div>
+    </div>
+
+    <div class="drawer-body">
+      <section id="titlePane" class="pane">
+        <div class="eyebrow">TITLE RULES</div>
+        <h3 class="pane-title">标题 Prompt</h3>
+        <p class="pane-desc">控制四语标题的 SEO、字符限制、关键词保留与输出结构。单商品临时要求仍放在主页面。</p>
+        <div class="rule-tags"><span class="rule-tag">SEO</span><span class="rule-tag">字符限制</span><span class="rule-tag">四语输出</span></div>
+        <div class="editor-wrap">
+          <div class="editor-top"><span>系统提示词</span><span>{CHAR_LIMIT} 可用</span></div>
+          <textarea id="titlePrompt">You are an expert cross-border e-commerce title optimizer.
+
+Rules:
+- Preserve all supported product facts.
+- Optimize keyword order for marketplace search.
+- Respect the configured character limit.
+- Never invent materials, functions, certifications or variants.
+- Return only the required JSON structure.</textarea>
+        </div>
+      </section>
+
+      <section id="descriptionPane" class="pane" hidden>
+        <div class="eyebrow">DESCRIPTION RULES</div>
+        <h3 class="pane-title">产品描述 Prompt</h3>
+        <p class="pane-desc">控制英文描述的事实融合、规格冲突处理、内容结构与防臆造规则，与标题 Prompt 完全独立。</p>
+        <div class="rule-tags"><span class="rule-tag">事实融合</span><span class="rule-tag">冲突处理</span><span class="rule-tag">描述结构</span></div>
+        <div class="editor-wrap">
+          <div class="editor-top"><span>系统提示词</span><span>English only</span></div>
+          <textarea id="descriptionPrompt">Role: Expert E-commerce Copywriter
+
+Task: Convert raw, duplicated and multi-language product information into one standardized English listing.
+
+Rules:
+- Correction information has the highest priority.
+- Prefer consistently supported specifications.
+- Omit unresolved conflicts.
+- Never infer unsupported selling points.
+- Do not invent Package Includes items or quantities.</textarea>
+        </div>
+      </section>
+    </div>
+
+    <div class="drawer-foot">
+      <div class="foot-row">
+        <div id="saveState" class="save-state">已载入本地 Prompt</div>
+        <div class="foot-actions">
+          <button id="resetBtn" class="btn secondary">恢复默认</button>
+          <button id="saveBtn" class="btn primary">保存</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+<script>
+  const drawer = document.getElementById('drawer');
+  const scrim = document.getElementById('scrim');
+  const openPrompt = document.getElementById('openPrompt');
+  const closePrompt = document.getElementById('closePrompt');
+  const segmented = document.getElementById('segmented');
+  const titlePane = document.getElementById('titlePane');
+  const descriptionPane = document.getElementById('descriptionPane');
+  const saveState = document.getElementById('saveState');
+  let activeTab = 'title';
+
+  function setOpen(open) {
+    drawer.classList.toggle('open', open);
+    scrim.classList.toggle('show', open);
+    openPrompt.classList.toggle('active', open);
+  }
+
+  function switchTab(tab) {
+    if (tab === activeTab) return;
+    activeTab = tab;
+    segmented.dataset.tab = tab;
+    segmented.querySelectorAll('.segment').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    titlePane.hidden = tab !== 'title';
+    descriptionPane.hidden = tab !== 'description';
+    saveState.textContent = tab === 'title' ? '当前：标题 Prompt' : '当前：产品描述 Prompt';
+  }
+
+  segmented.addEventListener('click', e => {
+    const btn = e.target.closest('.segment');
+    if (btn) switchTab(btn.dataset.tab);
+  });
+  openPrompt.addEventListener('click', () => setOpen(!drawer.classList.contains('open')));
+  closePrompt.addEventListener('click', () => setOpen(false));
+  scrim.addEventListener('click', () => setOpen(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
+
+  document.querySelectorAll('textarea').forEach(el => el.addEventListener('input', () => {
+    saveState.textContent = '有未保存的修改';
+  }));
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    saveState.textContent = '已保存';
+    setTimeout(() => saveState.textContent = activeTab === 'title' ? '当前：标题 Prompt' : '当前：产品描述 Prompt', 1200);
+  });
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    saveState.textContent = '已恢复默认（预览）';
+  });
+</script>
+</body>
+</html>

@@ -112,3 +112,49 @@ function getSettings() {
     charLimitCN: active.charLimitCN ?? data.charLimitCN ?? 60,
   };
 }
+
+// ===== Apple-inspired workspace enhancement (branch preview) =====
+// Load as an additive presentation/runtime layer so the original modules stay intact and
+// this redesign can be disabled with a single revert if needed.
+(() => {
+  const current = document.currentScript?.src;
+  if (!current) return;
+
+  const cssFiles = [
+    '../ui/apple-workspace.css',
+    '../ui/apple-profit-dock-tuning.css',
+    '../ui/apple-workflow-rhythm.css',
+    '../ui/translation-preview.css',
+    '../ui/translation-provider-v2.css',
+    '../ui/apple-drawer-typography.css',
+    '../ui/translation-preview-state.css',
+    '../ui/apple-layering.css',
+  ];
+  for (const relativePath of cssFiles) {
+    const href = new URL(relativePath, current).href;
+    if (document.querySelector(`link[href="${href}"]`)) continue;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
+  const scriptFiles = [
+    '../ui/apple-workspace.js',
+    '../ui/apple-profit-resize.js',
+    '../api/native-http.js',
+    '../translation-preview-providers.js',
+    '../translation-preview-native-providers.js',
+    '../translation-provider-v2.js',
+    '../translation-preview-ui.js',
+    '../ui/translation-native-status.js',
+  ];
+  for (const relativePath of scriptFiles) {
+    const src = new URL(relativePath, current).href;
+    if (document.querySelector(`script[src="${src}"]`)) continue;
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = false;
+    document.head.appendChild(script);
+  }
+})();

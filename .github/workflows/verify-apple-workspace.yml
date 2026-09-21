@@ -1,0 +1,166 @@
+name: Verify Apple workspace preview
+
+on:
+  pull_request:
+    paths:
+      - 'src/ui/**'
+      - 'src/api/**'
+      - 'src/translation-preview-*.js'
+      - 'src/core/config.js'
+      - 'tools/Patch-PakeWindowsUpdater.ps1'
+      - '.github/workflows/verify-apple-workspace.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-apple-workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate existing app invariants
+        run: python tools/validate_app.py
+
+      - name: Validate enhancement JavaScript syntax
+        run: |
+          node --check src/core/config.js
+          node --check src/ui/apple-workspace.js
+          node --check src/ui/apple-profit-resize.js
+          node --check src/api/native-http.js
+          node --check src/translation-preview-providers.js
+          node --check src/translation-preview-native-providers.js
+          node --check src/translation-preview-ui.js
+          node --check src/ui/translation-native-status.js
+
+      - name: Validate Baidu MD5 signature primitive
+        run: |
+          node - <<'NODE'
+          global.window = global;
+          require('./src/translation-preview-providers.js');
+          const actual = global.TranslationPreviewProviders.md5('abc');
+          const expected = '900150983cd24fb0d6963f7d28e17f72';
+          if (actual !== expected) throw new Error(`MD5 mismatch: ${actual}`);
+          console.log('OK   Baidu MD5 known vector');
+          NODE
+
+      - name: Validate native transport request shaping
+        run: |
+          node - <<'NODE'
+          global.window = global;
+          let lastCall = null;
+          global.__TAURI__ = {
+            core: {
+              invoke: async (command, payload) => {
+                lastCall = { command, payload };
+                return { status: 200, headers: { 'content-type': 'application/json' }, body: '{"ok":true}' };
+              },
+            },
+          };
+          global.applyProxyPrefix = (profile, url) => profile.proxy.url.replace(/\/+$/, '') + '/' + url;
+          require('./src/api/native-http.js');
+
+          (async () => {
+            const profile = { proxy: { enabled: true, mode: 'system', url: 'http://127.0.0.1:7890' } };
+            const response = await global.NativeHttpTransport.request(
+              'https://example.com/test',
+              { method: 'POST', headers: { Authorization: 'Bearer demo' }, body: '{"ping":true}' },
+              { timeoutMs: 5000, profile },
+            );
+            if (!response.ok || response.transport !== 'native') throw new Error('native response facade failed');
+            if (lastCall?.command !== 'native_http_request') throw new Error('native command was not invoked');
+            const params = lastCall?.payload?.params || {};
+            if (params.url !== 'https://example.com/test') throw new Error('unexpected native URL');
+            if (params.method !== 'POST') throw new Error('unexpected native method');
+            if (params.proxyUrl !== 'http://127.0.0.1:7890') throw new Error('explicit proxy was not forwarded');
+            if (params.timeoutMs !== 5000) throw new Error('timeout was not forwarded');
+
+            const prefixProfile = { proxy: { enabled: true, mode: 'prefix', url: 'https://proxy.example' } };
+            await global.NativeHttpTransport.request('https://api.example/v1', { method: 'GET' }, { profile: prefixProfile });
+            const prefixed = lastCall?.payload?.params || {};
+            if (prefixed.url !== 'https://proxy.example/https://api.example/v1') throw new Error('prefix proxy URL was not applied');
+            if (prefixed.proxyUrl !== null) throw new Error('prefix mode must not become a forward proxy');
+            console.log('OK   native transport request shaping');
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Validate Apple workspace integration invariants
+        shell: python
+        run: |
+          from pathlib import Path
+          core = Path('src/core/config.js').read_text(encoding='utf-8')
+          ui = Path('src/ui/apple-workspace.js').read_text(encoding='utf-8')
+          resize = Path('src/ui/apple-profit-resize.js').read_text(encoding='utf-8')
+          css = Path('src/ui/apple-workspace.css').read_text(encoding='utf-8')
+          tuning = Path('src/ui/apple-profit-dock-tuning.css').read_text(encoding='utf-8')
+          native = Path('src/api/native-http.js').read_text(encoding='utf-8')
+          tp = Path('src/translation-preview-providers.js').read_text(encoding='utf-8')
+          tpn = Path('src/translation-preview-native-providers.js').read_text(encoding='utf-8')
+          tui = Path('src/translation-preview-ui.js').read_text(encoding='utf-8')
+          tstatus = Path('src/ui/translation-native-status.js').read_text(encoding='utf-8')
+          tcss = Path('src/ui/translation-preview.css').read_text(encoding='utf-8')
+          pake_patch = Path('tools/Patch-PakeWindowsUpdater.ps1').read_text(encoding='utf-8')
+          checks = {
+              'loader references CSS': '../ui/apple-workspace.css' in core,
+              'loader references JS': '../ui/apple-workspace.js' in core,
+              'loader references calculator resizer': '../ui/apple-profit-resize.js' in core,
+              'loader references native HTTP transport': '../api/native-http.js' in core,
+              'loader references translation provider': '../translation-preview-providers.js' in core,
+              'loader references native provider overlay': '../translation-preview-native-providers.js' in core,
+              'loader references translation UI': '../translation-preview-ui.js' in core,
+              'loader references translation network status': '../ui/translation-native-status.js' in core,
+              'loader references translation CSS': '../ui/translation-preview.css' in core,
+              'four title maximum': 'MAX_TITLE_COUNT = 4' in ui,
+              'four-title route override': 'buildFourTitleRoutePrompt' in ui,
+              'segmented title selector': 'appleTitleSegmented' in ui and 'apple-title-segmented' in css,
+              'compact copy renderer': 'appleRenderOutput' in ui and 'apple-title-copy' in css,
+              'copy English shortcut': 'Copy English' in ui,
+              'profit dock fixed': 'position: fixed !important' in css and 'top: 50% !important' in css,
+              'calculator logic untouched by overlay': 'calcMargin' not in ui and 'calcRate' not in ui and 'recalcProfit' not in ui,
+              'calculator resize ratio fixed': 'BASE_WIDTH = 340' in resize and 'BASE_HEIGHT = 340' in resize,
+              'calculator resize scale bounded': 'MIN_SCALE = 0.9' in resize and 'MAX_SCALE = 1.4' in resize,
+              'calculator resize persisted as scale only': "SCALE_KEY = 'translator_profit_calc_scale'" in resize,
+              'calculator resize keeps left edge anchored': 'getMainRight(main) + CONTENT_GAP' in resize,
+              'calculator resize protects viewport edges': 'EDGE_GAP = 16' in resize and 'getMaxScale' in resize,
+              'calculator resize double-click reset': "handle.addEventListener('dblclick'" in resize and 'resetSize()' in resize,
+              'calculator business formulas not duplicated': 'recalcProfit' not in resize and 'calcMargin' not in resize and 'calcRate' not in resize,
+              'calculator spacing balanced globally': 'justify-content: space-between !important' in tuning and 'margin-top: auto' not in tuning,
+              'translation providers include all sources': all(x in tp for x in ['googleTranslate', 'microsoftTranslate', 'baiduTranslate', 'aiTranslate']),
+              'Microsoft keyless chain present': 'www.bing.com/translator' in tp and 'ttranslatev3' in tp,
+              'Baidu official endpoint present': 'fanyi-api.baidu.com/api/trans/vip/translate' in tp,
+              'AI translation prompt variables': all(x in tui for x in ['{{text}}', '{{from}}', '{{to}}']),
+              'translation source selector': "source.id = 'gtProvider'" in tui,
+              'translation settings button': "settingsButton.id = 'btnTranslationSettings'" in tui,
+              'translation controls are horizontal': 'flex-wrap: nowrap !important' in tcss,
+              'translation drawer scroll isolated': 'min-height: 0' in tcss and 'overflow-y: auto' in tcss,
+              'translation credentials have empty defaults': "baidu: { appId: '', secret: '' }" in tui and "key: ''," in tui,
+              'legacy preview intercepted without generator changes': "event.target?.closest?.('#btnGTTranslate')" in tui,
+              'native bridge invokes dedicated command': "invoke('native_http_request'" in native,
+              'native bridge prefers packaged transport': 'isNativeAvailable()' in native and "responseFacade(payload, 'native')" in native,
+              'native bridge explicit profile proxy': 'proxyUrl' in native and 'useSystemProxy' in native,
+              'native provider browser compatibility fallback': 'return legacy.translate(provider, text, targetLang, settings)' in tpn,
+              'native provider covers all four sources': all(x in tpn for x in ['googleTranslate', 'microsoftTranslate', 'baiduTranslate', 'aiTranslate']),
+              'native network status visible in settings': 'translationNativeNetworkCard' in tstatus,
+              'Pake patch defines native HTTP command': 'pub async fn native_http_request' in pake_patch,
+              'Pake native HTTP origin constrained': 'ensure_local_native_http_invoker' in pake_patch and 'tauri.localhost' in pake_patch,
+              'Pake native HTTP methods constrained': 'only allows GET and POST' in pake_patch,
+              'Pake native HTTP protocols constrained': 'only allows http:// or https:// URLs' in pake_patch,
+              'Pake native HTTP body bounded': 'MAX_NATIVE_HTTP_REQUEST_BODY_BYTES' in pake_patch and 'MAX_NATIVE_HTTP_RESPONSE_BODY_BYTES' in pake_patch,
+              'Pake native HTTP unsafe headers blocked': 'proxy-authorization' in pake_patch and 'content-length' in pake_patch,
+              'Pake native HTTP registered': "@('download_and_install_update', 'native_http_request')" in pake_patch,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          for name, ok in checks.items():
+              print(('OK   ' if ok else 'FAIL ') + name)
+          if failed:
+              raise SystemExit('Apple workspace validation failed: ' + ', '.join(failed))
