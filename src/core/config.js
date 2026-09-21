@@ -124,6 +124,7 @@ function getSettings() {
     '../ui/apple-workspace.css',
     '../ui/apple-profit-dock-tuning.css',
     '../ui/translation-preview.css',
+    '../ui/translation-provider-v2.css',
     '../ui/translation-preview-state.css',
   ];
   for (const relativePath of cssFiles) {
