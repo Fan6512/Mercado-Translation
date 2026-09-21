@@ -1,0 +1,26 @@
+/* Central stacking order for floating workspace UI.
+   Do not rely on dynamically-created Tailwind arbitrary z-index classes in the packaged client. */
+
+/* Floating calculator stays above the workspace, but below menus and drawers. */
+body.apple-workspace .apple-profit-dock {
+  z-index: 38 !important;
+}
+
+/* Compact title popovers. */
+body.apple-workspace .apple-title-copy-menu {
+  z-index: 70 !important;
+}
+
+/* Translation settings overlay/drawer. */
+.translation-settings-overlay {
+  z-index: 78 !important;
+}
+
+.translation-settings-drawer {
+  z-index: 79 !important;
+}
+
+/* Prompt is a top-level settings drawer and must always cover the floating calculator. */
+body.apple-workspace #promptPanel {
+  z-index: 90 !important;
+}
