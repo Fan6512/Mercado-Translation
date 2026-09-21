@@ -51,6 +51,49 @@ jobs:
           console.log('OK   Baidu MD5 known vector');
           NODE
 
+      - name: Validate native transport request shaping
+        run: |
+          node - <<'NODE'
+          global.window = global;
+          let lastCall = null;
+          global.__TAURI__ = {
+            core: {
+              invoke: async (command, payload) => {
+                lastCall = { command, payload };
+                return { status: 200, headers: { 'content-type': 'application/json' }, body: '{"ok":true}' };
+              },
+            },
+          };
+          global.applyProxyPrefix = (profile, url) => profile.proxy.url.replace(/\/+$/, '') + '/' + url;
+          require('./src/api/native-http.js');
+
+          (async () => {
+            const profile = { proxy: { enabled: true, mode: 'system', url: 'http://127.0.0.1:7890' } };
+            const response = await global.NativeHttpTransport.request(
+              'https://example.com/test',
+              { method: 'POST', headers: { Authorization: 'Bearer demo' }, body: '{"ping":true}' },
+              { timeoutMs: 5000, profile },
+            );
+            if (!response.ok || response.transport !== 'native') throw new Error('native response facade failed');
+            if (lastCall?.command !== 'native_http_request') throw new Error('native command was not invoked');
+            const params = lastCall?.payload?.params || {};
+            if (params.url !== 'https://example.com/test') throw new Error('unexpected native URL');
+            if (params.method !== 'POST') throw new Error('unexpected native method');
+            if (params.proxyUrl !== 'http://127.0.0.1:7890') throw new Error('explicit proxy was not forwarded');
+            if (params.timeoutMs !== 5000) throw new Error('timeout was not forwarded');
+
+            const prefixProfile = { proxy: { enabled: true, mode: 'prefix', url: 'https://proxy.example' } };
+            await global.NativeHttpTransport.request('https://api.example/v1', { method: 'GET' }, { profile: prefixProfile });
+            const prefixed = lastCall?.payload?.params || {};
+            if (prefixed.url !== 'https://proxy.example/https://api.example/v1') throw new Error('prefix proxy URL was not applied');
+            if (prefixed.proxyUrl !== null) throw new Error('prefix mode must not become a forward proxy');
+            console.log('OK   native transport request shaping');
+          })().catch(err => {
+            console.error(err);
+            process.exit(1);
+          });
+          NODE
+
       - name: Validate Apple workspace integration invariants
         shell: python
         run: |
@@ -109,6 +152,7 @@ jobs:
               'native provider covers all four sources': all(x in tpn for x in ['googleTranslate', 'microsoftTranslate', 'baiduTranslate', 'aiTranslate']),
               'native network status visible in settings': 'translationNativeNetworkCard' in tstatus,
               'Pake patch defines native HTTP command': 'pub async fn native_http_request' in pake_patch,
+              'Pake native HTTP origin constrained': 'ensure_local_native_http_invoker' in pake_patch and 'tauri.localhost' in pake_patch,
               'Pake native HTTP methods constrained': 'only allows GET and POST' in pake_patch,
               'Pake native HTTP protocols constrained': 'only allows http:// or https:// URLs' in pake_patch,
               'Pake native HTTP body bounded': 'MAX_NATIVE_HTTP_REQUEST_BODY_BYTES' in pake_patch and 'MAX_NATIVE_HTTP_RESPONSE_BODY_BYTES' in pake_patch,
