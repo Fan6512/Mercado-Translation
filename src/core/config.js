@@ -120,7 +120,11 @@ function getSettings() {
   const current = document.currentScript?.src;
   if (!current) return;
 
-  const cssFiles = ['../ui/apple-workspace.css', '../ui/apple-profit-dock-tuning.css'];
+  const cssFiles = [
+    '../ui/apple-workspace.css',
+    '../ui/apple-profit-dock-tuning.css',
+    '../ui/translation-preview.css',
+  ];
   for (const relativePath of cssFiles) {
     const href = new URL(relativePath, current).href;
     if (document.querySelector(`link[href="${href}"]`)) continue;
@@ -130,7 +134,12 @@ function getSettings() {
     document.head.appendChild(link);
   }
 
-  const scriptFiles = ['../ui/apple-workspace.js', '../ui/apple-profit-resize.js'];
+  const scriptFiles = [
+    '../ui/apple-workspace.js',
+    '../ui/apple-profit-resize.js',
+    '../translation-preview-providers.js',
+    '../translation-preview-ui.js',
+  ];
   for (const relativePath of scriptFiles) {
     const src = new URL(relativePath, current).href;
     if (document.querySelector(`script[src="${src}"]`)) continue;
