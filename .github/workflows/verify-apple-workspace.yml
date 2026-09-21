@@ -40,6 +40,7 @@ jobs:
           ui = Path('src/ui/apple-workspace.js').read_text(encoding='utf-8')
           resize = Path('src/ui/apple-profit-resize.js').read_text(encoding='utf-8')
           css = Path('src/ui/apple-workspace.css').read_text(encoding='utf-8')
+          tuning = Path('src/ui/apple-profit-dock-tuning.css').read_text(encoding='utf-8')
           checks = {
               'loader references CSS': '../ui/apple-workspace.css' in core,
               'loader references JS': '../ui/apple-workspace.js' in core,
@@ -51,13 +52,14 @@ jobs:
               'copy English shortcut': 'Copy English' in ui,
               'profit dock fixed': 'position: fixed !important' in css and 'top: 50% !important' in css,
               'calculator logic untouched by overlay': 'calcMargin' not in ui and 'calcRate' not in ui and 'recalcProfit' not in ui,
-              'calculator resize ratio fixed': 'BASE_WIDTH = 340' in resize and 'BASE_HEIGHT = 425' in resize,
+              'calculator resize ratio fixed': 'BASE_WIDTH = 340' in resize and 'BASE_HEIGHT = 340' in resize,
               'calculator resize scale bounded': 'MIN_SCALE = 0.9' in resize and 'MAX_SCALE = 1.4' in resize,
               'calculator resize persisted as scale only': "SCALE_KEY = 'translator_profit_calc_scale'" in resize,
               'calculator resize keeps left edge anchored': 'getMainRight(main) + CONTENT_GAP' in resize,
               'calculator resize protects viewport edges': 'EDGE_GAP = 16' in resize and 'getMaxScale' in resize,
               'calculator resize double-click reset': "handle.addEventListener('dblclick'" in resize and 'resetSize()' in resize,
               'calculator business formulas not duplicated': 'recalcProfit' not in resize and 'calcMargin' not in resize and 'calcRate' not in resize,
+              'calculator spacing balanced globally': 'justify-content: space-between !important' in tuning and 'margin-top: auto' not in tuning,
           }
           failed = [name for name, ok in checks.items() if not ok]
           for name, ok in checks.items():
