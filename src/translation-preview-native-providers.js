@@ -25,6 +25,7 @@
     pt: 'Brazilian Portuguese',
   });
   const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36';
+  const MICROSOFT_SEGMENT_LIMIT = 950;
 
   let bingAuth = null;
 
@@ -112,14 +113,38 @@
     return bingAuth;
   }
 
-  async function microsoftTranslate(text, targetLang, settings, retried) {
+  function splitMicrosoftText(text, limit = MICROSOFT_SEGMENT_LIMIT) {
+    const input = String(text || '').trim();
+    if (!input) return [];
+    const parts = [];
+    let rest = input;
+    const preferred = /[\n。！？!?；;\.，,：:]\s*|\s+/g;
+    while (rest.length > limit) {
+      const windowText = rest.slice(0, limit + 1);
+      let splitAt = -1;
+      let match;
+      preferred.lastIndex = 0;
+      while ((match = preferred.exec(windowText))) {
+        const candidate = match.index + match[0].length;
+        if (candidate >= Math.floor(limit * 0.55) && candidate <= limit) splitAt = candidate;
+      }
+      if (splitAt < 1) splitAt = limit;
+      const part = rest.slice(0, splitAt).trim();
+      if (part) parts.push(part);
+      rest = rest.slice(splitAt).trimStart();
+    }
+    if (rest.trim()) parts.push(rest.trim());
+    return parts;
+  }
+
+  async function microsoftTranslateOne(text, targetLang, settings, retried) {
     const auth = await getBingAuth(settings, false);
     const url = 'https://www.bing.com/ttranslatev3?isVertical=1&IG=' + encodeURIComponent(auth.ig) +
       '&IID=' + encodeURIComponent(auth.iid);
     const body = new URLSearchParams({
       fromLang: 'auto-detect',
       to: mapLang(BING_LANG, targetLang),
-      text: String(text || '').slice(0, 1000),
+      text: String(text || ''),
       token: auth.token,
       key: auth.key,
     }).toString();
@@ -142,10 +167,20 @@
     if (!retried) {
       bingAuth = null;
       await getBingAuth(settings, true);
-      return microsoftTranslate(text, targetLang, settings, true);
+      return microsoftTranslateOne(text, targetLang, settings, true);
     }
     if (!resp.ok) throw new Error(`Microsoft HTTP ${resp.status}${rawText ? ': ' + rawText.slice(0, 160) : ''}`);
     throw new Error('Microsoft 未返回有效译文');
+  }
+
+  async function microsoftTranslate(text, targetLang, settings) {
+    const segments = splitMicrosoftText(text);
+    if (!segments.length) return '';
+    const translated = [];
+    for (const segment of segments) {
+      translated.push(await microsoftTranslateOne(segment, targetLang, settings, false));
+    }
+    return translated.join('\n').trim();
   }
 
   async function baiduTranslate(text, targetLang, settings) {
