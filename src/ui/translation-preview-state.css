@@ -1,0 +1,9 @@
+/* State layer loaded after component styles so Tailwind's generic .hidden utility
+   cannot be overridden by drawer/pane display declarations. */
+.translation-settings-drawer.hidden,
+.translation-settings-overlay.hidden,
+.translation-settings-pane.hidden,
+.translation-ai-custom.hidden,
+.translation-current-api.hidden {
+  display: none !important;
+}
