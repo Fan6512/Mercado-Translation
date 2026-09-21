@@ -126,6 +126,7 @@ function getSettings() {
     '../ui/translation-preview.css',
     '../ui/translation-provider-v2.css',
     '../ui/translation-preview-state.css',
+    '../ui/apple-layering.css',
   ];
   for (const relativePath of cssFiles) {
     const href = new URL(relativePath, current).href;
