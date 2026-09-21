@@ -1,0 +1,33 @@
+/* Provider v2 settings refinements. Kept separate so the base drawer remains rollback-safe. */
+.translation-settings-tabs {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.translation-settings-tabs button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.translation-provider-official-fields {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0,0,0,.065);
+}
+
+.translation-provider-official-fields.hidden {
+  display: none !important;
+}
+
+@media (max-width: 440px) {
+  .translation-settings-tabs {
+    gap: 2px;
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+  .translation-settings-tabs button {
+    padding: 0 4px;
+    font-size: 10.5px;
+  }
+}
