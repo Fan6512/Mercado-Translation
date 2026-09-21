@@ -1,0 +1,81 @@
+name: Verify translation provider v2
+
+on:
+  pull_request:
+    paths:
+      - 'src/translation-provider-v2.js'
+      - 'src/translation-preview-ui.js'
+      - 'src/ui/translation-provider-v2.css'
+      - 'src/ui/apple-drawer-typography.css'
+      - 'src/core/config.js'
+      - 'src/api/native-http.js'
+      - 'src/translation-preview-native-providers.js'
+      - 'tools/test_translation_provider_v2.js'
+      - '.github/workflows/verify-translation-provider-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-provider-v2:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check src/translation-provider-v2.js
+          node --check src/translation-preview-ui.js
+          node --check tools/test_translation_provider_v2.js
+
+      - name: Validate provider v2 behavior
+        run: node tools/test_translation_provider_v2.js
+
+      - name: Validate integration invariants
+        shell: python
+        run: |
+          from pathlib import Path
+
+          core = Path('src/core/config.js').read_text(encoding='utf-8')
+          provider = Path('src/translation-provider-v2.js').read_text(encoding='utf-8')
+          ui = Path('src/translation-preview-ui.js').read_text(encoding='utf-8')
+          css = Path('src/ui/translation-provider-v2.css').read_text(encoding='utf-8')
+          typography = Path('src/ui/apple-drawer-typography.css').read_text(encoding='utf-8')
+
+          checks = {
+              'provider v2 script loaded': '../translation-provider-v2.js' in core,
+              'provider v2 CSS loaded': '../ui/translation-provider-v2.css' in core,
+              'shared drawer typography loaded': '../ui/apple-drawer-typography.css' in core,
+              'typography loads after drawer skin': core.index('../ui/translation-provider-v2.css') < core.index('../ui/apple-drawer-typography.css'),
+              'state CSS loads after typography': core.index('../ui/apple-drawer-typography.css') < core.index('../ui/translation-preview-state.css'),
+              'Google Cloud official endpoint': 'translation.googleapis.com/language/translate/v2' in provider,
+              'Google key uses request header': "'X-Goog-Api-Key': apiKey" in provider,
+              'Google key is not query parameter': '?key=${encodeURIComponent(apiKey)}' not in provider,
+              'Azure official endpoint': 'api.cognitive.microsofttranslator.com' in provider,
+              'Azure subscription key header': 'Ocp-Apim-Subscription-Key' in provider,
+              'Azure region optional header': 'Ocp-Apim-Subscription-Region' in provider,
+              'Azure endpoint HTTPS guard': 'Endpoint 必须使用 HTTPS' in provider,
+              'Google 429 cooldown': "candidate === 'google-free'" in provider and 'GOOGLE_FREE_COOLDOWN_MS' in provider,
+              'Bing network cooldown': 'BING_NETWORK_COOLDOWN_MS' in provider,
+              'vendor-level tabs': all(x in ui for x in ['>Google<', '>Microsoft<', '>百度<', '>AI<']),
+              'Google mode selector': "id=\"translationGoogleMode\"" in ui,
+              'Microsoft mode selector': "id=\"translationMicrosoftMode\"" in ui,
+              'five-tab layout': 'repeat(5, minmax(0, 1fr))' in css,
+              'drawer title typography shared': '--apple-drawer-title-size: 19px' in typography and '--apple-drawer-title-weight: 600' in typography,
+              'drawer section typography shared': '--apple-drawer-section-size: 16px' in typography and '--apple-drawer-section-weight: 600' in typography,
+              'drawer tabs typography shared': '--apple-drawer-tab-size: 12px' in typography and '--apple-drawer-tab-weight: 600' in typography,
+              'Prompt and Translation both targeted': '#promptPanel h2' in typography and '.translation-settings-header h2' in typography,
+              'credential defaults empty': "cloudApiKey: ''" in ui and "azureKey: ''" in ui,
+          }
+          failed = [name for name, ok in checks.items() if not ok]
+          for name, ok in checks.items():
+              print(('OK   ' if ok else 'FAIL ') + name)
+          if failed:
+              raise SystemExit('Provider v2 validation failed: ' + ', '.join(failed))

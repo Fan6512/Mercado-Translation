@@ -123,7 +123,10 @@ function getSettings() {
   const cssFiles = [
     '../ui/apple-workspace.css',
     '../ui/apple-profit-dock-tuning.css',
+    '../ui/apple-workflow-rhythm.css',
     '../ui/translation-preview.css',
+    '../ui/translation-provider-v2.css',
+    '../ui/apple-drawer-typography.css',
     '../ui/translation-preview-state.css',
     '../ui/apple-layering.css',
   ];
@@ -142,6 +145,7 @@ function getSettings() {
     '../api/native-http.js',
     '../translation-preview-providers.js',
     '../translation-preview-native-providers.js',
+    '../translation-provider-v2.js',
     '../translation-preview-ui.js',
     '../ui/translation-native-status.js',
   ];
