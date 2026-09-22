@@ -1359,13 +1359,61 @@ function closeUpdateDialog() {
   document.getElementById('updateProgress').classList.add('hidden');
 }
 
+function formatUpdateBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return '';
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function renderUpdateProgress({ downloadedBytes = 0, totalBytes = null, text = '正在下载更新…' } = {}) {
+  const box = document.getElementById('updateProgress');
+  const textEl = document.getElementById('updateProgressText');
+  const percentEl = document.getElementById('updateProgressPercent');
+  const track = document.getElementById('updateProgressTrack');
+  const bar = document.getElementById('updateProgressBar');
+  const meta = document.getElementById('updateProgressMeta');
+  const downloaded = Math.max(0, Number(downloadedBytes) || 0);
+  const total = Number(totalBytes);
+  const hasTotal = Number.isFinite(total) && total > 0;
+
+  box.classList.remove('hidden');
+  box.classList.remove('is-error');
+  textEl.textContent = text;
+  bar.classList.toggle('is-indeterminate', !hasTotal);
+  if (hasTotal) {
+    const percent = Math.min(100, Math.max(0, Math.round(downloaded / total * 100)));
+    bar.style.width = `${percent}%`;
+    percentEl.textContent = `${percent}%`;
+    meta.textContent = `${formatUpdateBytes(downloaded)} / ${formatUpdateBytes(total)}`;
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+    track.setAttribute('aria-valuenow', String(percent));
+  } else {
+    bar.style.width = '';
+    percentEl.textContent = '';
+    meta.textContent = downloaded > 0 ? `已下载 ${formatUpdateBytes(downloaded)}` : '正在连接 GitHub Release…';
+    track.removeAttribute('aria-valuemin');
+    track.removeAttribute('aria-valuemax');
+    track.removeAttribute('aria-valuenow');
+  }
+}
+
+function setUpdateDismissDisabled(disabled) {
+  document.getElementById('btnCloseUpdate').disabled = disabled;
+  document.getElementById('btnLaterUpdate').disabled = disabled;
+}
+
 function openUpdateDialog(update) {
   pendingDesktopUpdate = update;
   document.getElementById('updateVersionText').textContent =
     `当前 v${APP_RELEASE_VERSION} → 最新 ${update.tag}`;
   document.getElementById('updateProgress').classList.add('hidden');
+  renderUpdateProgress({ downloadedBytes: 0, totalBytes: update.size, text: '准备下载…' });
+  document.getElementById('updateProgress').classList.add('hidden');
   document.getElementById('btnInstallUpdate').disabled = false;
   document.getElementById('btnInstallUpdate').textContent = '立即升级';
+  setUpdateDismissDisabled(false);
   document.getElementById('updateDialog').classList.remove('hidden');
 }
 
@@ -1382,10 +1430,13 @@ async function checkForDesktopUpdate({ manual = false } = {}) {
     btn.textContent = '检查中…';
   }
 
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 20000);
   try {
     const resp = await fetch(RELEASE_LATEST_API, {
       headers: { 'Accept': 'application/vnd.github+json' },
       cache: 'no-store',
+      signal: ctrl.signal,
     });
     if (!resp.ok) throw new Error(`GitHub API ${resp.status}`);
 
@@ -1410,12 +1461,15 @@ async function checkForDesktopUpdate({ manual = false } = {}) {
       tag,
       filename: asset.name,
       url: asset.browser_download_url,
+      size: Number.isFinite(Number(asset.size)) && Number(asset.size) > 0 ? Number(asset.size) : null,
       releaseUrl: release.html_url || '',
     });
   } catch (err) {
-    if (manual) showError('检查更新失败：' + (err.message || err));
+    const message = err?.name === 'AbortError' ? '检查更新超时，请稍后重试' : (err.message || err);
+    if (manual) showError('检查更新失败：' + message);
     else console.warn('[updater] startup update check failed:', err);
   } finally {
+    clearTimeout(timer);
     if (manual) {
       btn.disabled = false;
       btn.textContent = oldText;
@@ -1430,21 +1484,44 @@ async function installPendingDesktopUpdate() {
   const progress = document.getElementById('updateProgress');
   installBtn.disabled = true;
   installBtn.textContent = '正在升级…';
-  progress.textContent = '正在从 GitHub 下载 MSI。下载完成后会自动启动覆盖安装，当前程序将退出。';
-  progress.classList.remove('hidden');
+  setUpdateDismissDisabled(true);
+  renderUpdateProgress({ downloadedBytes: 0, totalBytes: pendingDesktopUpdate.size });
+
+  let unlistenProgress = null;
 
   try {
+    if (window.__TAURI__.event?.listen) {
+      try {
+        unlistenProgress = await window.__TAURI__.event.listen('update-download-progress', event => {
+          renderUpdateProgress(event?.payload || {});
+        });
+      } catch (eventError) {
+        console.warn('[updater] progress listener unavailable:', eventError);
+        renderUpdateProgress({ text: '正在下载更新…' });
+      }
+    } else {
+      renderUpdateProgress({ text: '正在下载更新…' });
+    }
     await window.__TAURI__.core.invoke('download_and_install_update', {
       params: {
         url: pendingDesktopUpdate.url,
         filename: pendingDesktopUpdate.filename,
+        expectedSize: pendingDesktopUpdate.size,
       },
     });
   } catch (err) {
     installBtn.disabled = false;
     installBtn.textContent = '重试升级';
-    progress.textContent = '升级失败：' + (err?.message || err);
+    setUpdateDismissDisabled(false);
+    progress.classList.add('is-error');
+    document.getElementById('updateProgressText').textContent = '升级失败：' + (err?.message || err);
+    document.getElementById('updateProgressPercent').textContent = '';
+    document.getElementById('updateProgressBar').classList.remove('is-indeterminate');
+    document.getElementById('updateProgressBar').style.width = '0';
+    document.getElementById('updateProgressMeta').textContent = '请检查网络后重试，已下载的不完整文件不会安装。';
     progress.classList.remove('hidden');
+  } finally {
+    if (typeof unlistenProgress === 'function') unlistenProgress();
   }
 }
 

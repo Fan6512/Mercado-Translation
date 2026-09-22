@@ -19,6 +19,15 @@
   .app-title-line { display: flex; align-items: center; gap: 9px; }
   .app-version-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px solid rgba(100,116,139,.14); border-radius: 999px; background: rgba(148,163,184,.10); color: #64748b; font-size: 11px; font-weight: 600; line-height: 1; letter-spacing: .01em; box-shadow: inset 0 1px 0 rgba(255,255,255,.65); }
   .app-version-badge[hidden] { display: none; }
+  .update-progress-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .update-progress-percent { color: #475569; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .update-progress-track { height: 7px; margin-top: 9px; overflow: hidden; border-radius: 999px; background: rgba(37,99,235,.12); }
+  .update-progress-bar { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#2563eb,#60a5fa); transition: width .18s ease; }
+  .update-progress-bar.is-indeterminate { width: 34%; animation: update-progress-slide 1.15s ease-in-out infinite; }
+  .update-progress-meta { min-height: 16px; margin-top: 6px; color: #64748b; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .update-progress-panel.is-error { border-color: #fecaca; background: #fff1f2; color: #be123c; }
+  .update-dismiss:disabled { cursor: not-allowed; opacity: .35; }
+  @keyframes update-progress-slide { 0% { transform: translateX(-110%); } 100% { transform: translateX(310%); } }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
@@ -347,14 +356,23 @@
         <h2 class="font-semibold text-slate-900 text-lg">发现新版本</h2>
         <p id="updateVersionText" class="text-sm text-slate-500 mt-1"></p>
       </div>
-      <button id="btnCloseUpdate" class="text-slate-400 hover:text-slate-700 text-lg">✕</button>
+      <button id="btnCloseUpdate" class="update-dismiss text-slate-400 hover:text-slate-700 text-lg">✕</button>
     </div>
     <p class="text-sm text-slate-600 mt-4 leading-relaxed">
       点击升级后会自动下载官方 GitHub Release 的 MSI 安装包，启动覆盖安装并关闭当前程序。现有本地配置会继续保留。
     </p>
-    <div id="updateProgress" class="hidden mt-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2"></div>
+    <div id="updateProgress" class="update-progress-panel hidden mt-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5" aria-live="polite">
+      <div class="update-progress-head">
+        <span id="updateProgressText">准备下载…</span>
+        <span id="updateProgressPercent" class="update-progress-percent"></span>
+      </div>
+      <div id="updateProgressTrack" class="update-progress-track" role="progressbar" aria-label="更新下载进度">
+        <div id="updateProgressBar" class="update-progress-bar"></div>
+      </div>
+      <div id="updateProgressMeta" class="update-progress-meta"></div>
+    </div>
     <div class="flex justify-end gap-2 mt-5">
-      <button id="btnLaterUpdate" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">稍后</button>
+      <button id="btnLaterUpdate" class="update-dismiss px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">稍后</button>
       <button id="btnInstallUpdate" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">立即升级</button>
     </div>
   </div>

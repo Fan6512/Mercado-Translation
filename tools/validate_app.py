@@ -17,6 +17,7 @@ adapter_path = root / "src" / "api" / "provider-adapters.js"
 client_path = root / "src" / "api" / "client.js"
 translation_path = root / "src" / "translation.js"
 app_path = root / "src" / "app.js"
+updater_patch_path = root / "tools" / "Patch-PakeWindowsUpdater.ps1"
 
 paths = [core_path, adapter_path, client_path, translation_path, app_path]
 core = core_path.read_text(encoding="utf-8") if core_path.exists() else ""
@@ -24,6 +25,7 @@ adapter = adapter_path.read_text(encoding="utf-8") if adapter_path.exists() else
 client = client_path.read_text(encoding="utf-8") if client_path.exists() else ""
 translation = translation_path.read_text(encoding="utf-8") if translation_path.exists() else ""
 app = app_path.read_text(encoding="utf-8") if app_path.exists() else ""
+updater_patch = updater_patch_path.read_text(encoding="utf-8") if updater_patch_path.exists() else ""
 
 script_order = [
     './src/core/config.js',
@@ -91,6 +93,10 @@ checks = {
     "desktop updater version placeholder present": "const APP_RELEASE_VERSION = '__APP_VERSION__';" in app,
     "desktop updater checks GitHub releases": "RELEASE_LATEST_API" in app and "checkForDesktopUpdate" in app,
     "desktop updater invokes native installer bridge": "download_and_install_update" in app,
+    "desktop updater renders native download progress": all(token in app for token in ["update-download-progress", "renderUpdateProgress", "expectedSize"]),
+    "desktop updater UI includes progress bar": all(token in index for token in ['id="updateProgressBar"', 'role="progressbar"', 'id="updateProgressMeta"']),
+    "desktop updater keeps partial downloads non-executable": all(token in updater_patch for token in ['.part', 'std::fs::rename', 'Update download was incomplete']),
+    "desktop updater bounds and validates download size": all(token in updater_patch for token in ['MAX_UPDATE_DOWNLOAD_BYTES', 'expected_size', 'content_length()']),
 }
 
 failed = [name for name, ok in checks.items() if not ok]

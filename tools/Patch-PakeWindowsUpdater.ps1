@@ -51,6 +51,15 @@ if ($invoke -notmatch 'download_and_install_update') {
 pub struct InstallUpdateParams {
     url: String,
     filename: String,
+    #[serde(rename = "expectedSize")]
+    expected_size: Option<u64>,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateDownloadProgress {
+    downloaded_bytes: u64,
+    total_bytes: Option<u64>,
 }
 
 #[command]
@@ -77,8 +86,18 @@ pub async fn download_and_install_update(
         return Err("Unexpected update installer filename.".into());
     }
 
+    const MAX_UPDATE_DOWNLOAD_BYTES: u64 = 512 * 1024 * 1024;
+    if params.expected_size == Some(0)
+        || params.expected_size.is_some_and(|size| size > MAX_UPDATE_DOWNLOAD_BYTES)
+    {
+        return Err("Unexpected update installer size.".into());
+    }
+
     let output_path = std::env::temp_dir().join(filename);
+    let partial_path = std::env::temp_dir().join(format!("{filename}.part"));
     let client = ClientBuilder::new()
+        .connect_timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(15 * 60))
         .build()
         .map_err(|e| format!("Failed to build update client: {e}"))?;
     let request = Request::new(Method::GET, url);
@@ -94,17 +113,77 @@ pub async fn download_and_install_update(
         ));
     }
 
-    let mut file =
-        File::create(&output_path).map_err(|e| format!("Failed to create update file: {e}"))?;
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| format!("Failed to download update chunk: {e}"))?
-    {
-        file.write_all(&chunk)
-            .map_err(|e| format!("Failed to write update file: {e}"))?;
+    let response_size = response.content_length();
+    if response_size.is_some_and(|size| size == 0 || size > MAX_UPDATE_DOWNLOAD_BYTES) {
+        return Err("Unexpected update download size.".into());
     }
-    drop(file);
+    if let (Some(expected), Some(actual)) = (params.expected_size, response_size) {
+        if expected != actual {
+            return Err("Update download size does not match the GitHub Release asset.".into());
+        }
+    }
+    let total_bytes = params.expected_size.or(response_size);
+    let _ = std::fs::remove_file(&partial_path);
+    let download_result: Result<u64, String> = async {
+        let mut file = File::create(&partial_path)
+            .map_err(|e| format!("Failed to create update file: {e}"))?;
+        let mut downloaded_bytes = 0u64;
+        let mut last_progress = std::time::Instant::now();
+        let _ = tauri::Emitter::emit(
+            &app,
+            "update-download-progress",
+            UpdateDownloadProgress { downloaded_bytes, total_bytes },
+        );
+
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| format!("Failed to download update chunk: {e}"))?
+        {
+            downloaded_bytes = downloaded_bytes.saturating_add(chunk.len() as u64);
+            if downloaded_bytes > MAX_UPDATE_DOWNLOAD_BYTES
+                || total_bytes.is_some_and(|total| downloaded_bytes > total)
+            {
+                return Err("Update download exceeded the expected size.".into());
+            }
+            file.write_all(&chunk)
+                .map_err(|e| format!("Failed to write update file: {e}"))?;
+
+            let complete = total_bytes == Some(downloaded_bytes);
+            if complete || last_progress.elapsed() >= std::time::Duration::from_millis(120) {
+                let _ = tauri::Emitter::emit(
+                    &app,
+                    "update-download-progress",
+                    UpdateDownloadProgress { downloaded_bytes, total_bytes },
+                );
+                last_progress = std::time::Instant::now();
+            }
+        }
+        file.flush().map_err(|e| format!("Failed to flush update file: {e}"))?;
+        Ok(downloaded_bytes)
+    }
+    .await;
+
+    let downloaded_bytes = match download_result {
+        Ok(value) => value,
+        Err(error) => {
+            let _ = std::fs::remove_file(&partial_path);
+            return Err(error);
+        }
+    };
+    if downloaded_bytes == 0 || total_bytes.is_some_and(|total| downloaded_bytes != total) {
+        let _ = std::fs::remove_file(&partial_path);
+        return Err("Update download was incomplete.".into());
+    }
+    let _ = tauri::Emitter::emit(
+        &app,
+        "update-download-progress",
+        UpdateDownloadProgress { downloaded_bytes, total_bytes: Some(downloaded_bytes) },
+    );
+
+    let _ = std::fs::remove_file(&output_path);
+    std::fs::rename(&partial_path, &output_path)
+        .map_err(|e| format!("Failed to finalize update file: {e}"))?;
 
     #[cfg(target_os = "windows")]
     {

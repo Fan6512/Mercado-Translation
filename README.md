@@ -86,7 +86,7 @@ clean.bat
 - `Mercado-Translation-vX.Y.Z-Windows-x64-Setup.msi`：**推荐安装 / 覆盖升级版**。同一 MSI UpgradeCode 跨版本保持不变，Windows 会把新版识别为同一个应用的升级。
 - `Mercado-Translation-vX.Y.Z-Windows-x64-Portable.exe`：**免安装便携版**。适合临时运行，不作为自动升级入口。
 
-Windows 安装版启动后会自动检查 GitHub 最新正式 Release。若发现更高版本，会弹出“发现新版本”提示；点击“立即升级”后，应用会下载本仓库 Release 中对应的 `Setup.msi`，以 Windows 被动安装模式启动覆盖升级并退出当前程序。
+Windows 安装版启动后会自动检查 GitHub 最新正式 Release。若发现更高版本，会弹出“发现新版本”提示；点击“立即升级”后，应用会显示实时下载进度，下载本仓库 Release 中对应的 `Setup.msi`，以 Windows 被动安装模式启动覆盖升级并退出当前程序。下载过程使用 `.part` 临时文件，只有大小与 GitHub Release 资产一致的完整文件才会进入安装流程。
 
 自动更新的原生桥接只允许访问：
 
