@@ -159,7 +159,8 @@
       <div class="flex gap-2 flex-shrink-0 flex-wrap">
         <button id="btnImportProfile" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="从 JSON 文件导入配置">📥 导入</button>
         <button id="btnExportProfile" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="把全部配置导出成 JSON 文件">📤 导出</button>
-        <button id="btnTestProfile" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">🔌 测试连接</button>
+        <span id="connectionTestStatus" class="text-xs text-slate-500" aria-live="polite"></span>
+        <button id="btnTestProfile" type="button" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">🔌 测试连接</button>
         <button id="btnSaveSettings" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存当前配置</button>
       </div>
     </div>
