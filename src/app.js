@@ -1326,6 +1326,14 @@ function parseSemver(version) {
   return m ? m.slice(1).map(Number) : null;
 }
 
+function renderAppVersion() {
+  const badge = document.getElementById('appVersionBadge');
+  if (!badge) return;
+  const version = String(APP_RELEASE_VERSION || '').trim().replace(/^v/i, '');
+  badge.hidden = !parseSemver(version);
+  badge.textContent = badge.hidden ? '' : `v${version}`;
+}
+
 function compareSemver(a, b) {
   const av = parseSemver(a);
   const bv = parseSemver(b);
@@ -1452,6 +1460,8 @@ if (canUseNativeUpdater()) {
   // 不阻塞主界面启动；网络失败也只记控制台，不打扰正常使用。
   setTimeout(() => checkForDesktopUpdate({ manual: false }), 1200);
 }
+
+renderAppVersion();
 
 // ===== 初始化 =====
 loadSettings();
