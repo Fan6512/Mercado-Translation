@@ -16,6 +16,9 @@
   details > summary { cursor: pointer; user-select: none; }
   details > summary::-webkit-details-marker { display: none; }
   .spinner { border: 2px solid #e5e7eb; border-top-color: #2563eb; border-radius: 50%; width: 16px; height: 16px; animation: spin 0.8s linear infinite; display: inline-block; }
+  .app-title-line { display: flex; align-items: center; gap: 9px; }
+  .app-version-badge { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border: 1px solid rgba(100,116,139,.14); border-radius: 999px; background: rgba(148,163,184,.10); color: #64748b; font-size: 11px; font-weight: 600; line-height: 1; letter-spacing: .01em; box-shadow: inset 0 1px 0 rgba(255,255,255,.65); }
+  .app-version-badge[hidden] { display: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
@@ -25,7 +28,10 @@
   <div class="flex-1 min-w-0">
   <header class="mb-6 flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-slate-900">跨境电商四语标题翻译</h1>
+      <div class="app-title-line">
+        <h1 class="text-2xl font-bold text-slate-900">跨境电商四语标题翻译</h1>
+        <span id="appVersionBadge" class="app-version-badge" hidden></span>
+      </div>
       <p class="text-sm text-slate-500 mt-1">中/英 → 英语 · 西班牙语(MX/CL/CO) · 葡萄牙语(BR) · 中文，SEO 优化版</p>
     </div>
     <div class="flex items-center gap-2">
@@ -159,7 +165,8 @@
       <div class="flex gap-2 flex-shrink-0 flex-wrap">
         <button id="btnImportProfile" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="从 JSON 文件导入配置">📥 导入</button>
         <button id="btnExportProfile" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100" title="把全部配置导出成 JSON 文件">📤 导出</button>
-        <button id="btnTestProfile" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">🔌 测试连接</button>
+        <span id="connectionTestStatus" class="text-xs text-slate-500" aria-live="polite"></span>
+        <button id="btnTestProfile" type="button" class="px-4 py-2 text-sm bg-white border border-slate-300 rounded-lg hover:bg-slate-100">🔌 测试连接</button>
         <button id="btnSaveSettings" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">保存当前配置</button>
       </div>
     </div>

@@ -198,33 +198,66 @@ async function testConnection() {
   if (!p.base) { showError('请先填写接口地址'); return; }
   if (!p.key) { showError('请先填写 API Key'); return; }
   const btn = document.getElementById('btnTestProfile');
+  const status = document.getElementById('connectionTestStatus');
   const label = btn.textContent;
   btn.disabled = true; btn.textContent = '测试中...';
+  const setStatus = (message, tone = 'busy') => {
+    status.textContent = message;
+    status.className = tone === 'success'
+      ? 'text-xs text-emerald-600'
+      : tone === 'error' ? 'text-xs text-rose-600' : 'text-xs text-slate-500';
+  };
   // 测试连接要的是「真实一次往返」，所以不重试（重试会让延迟数字失真）
-  const opts = { timeoutMs: (p.timeout ?? 120) * 1000, retry: 0 };
+  // 连接测试应快速给出结果，不能沿用生成任务最长 120 秒的等待时间。
+  const timeoutMs = Math.min(15, Math.max(1, p.timeout || 15)) * 1000;
+  const opts = { timeoutMs, retry: 0 };
+  const requestJson = async (path, init = {}) => {
+    if (window.NativeHttpTransport?.request) {
+      const resp = await window.NativeHttpTransport.request(p.base + path, init, { timeoutMs, profile: p });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        const e = new Error(`${resp.status} ${body.slice(0, 160)}`.trim());
+        e.status = resp.status;
+        throw e;
+      }
+      return (await resp.json().catch(() => ({}))) || {};
+    }
+    return fetchJsonWithRetry(buildApiUrl(p, path), init, opts);
+  };
   try {
     const t0 = Date.now();
+    setStatus('正在测试模型列表…');
     try {
-      const data = await fetchJsonWithRetry(buildApiUrl(p, '/models'), { headers: { 'Authorization': 'Bearer ' + p.key } }, opts);
+      const data = await requestJson('/models', { headers: { 'Authorization': 'Bearer ' + p.key } });
       const n = Array.isArray(data.data) ? data.data.length : 0;
-      flash(`连接正常 · ${Date.now() - t0}ms${n ? ` · 共 ${n} 个模型` : ''}`);
+      const message = `连接正常 · ${Date.now() - t0}ms${n ? ` · 共 ${n} 个模型` : ''}`;
+      setStatus('✓ ' + message, 'success');
+      flash(message);
       return;
     } catch (e) {
       // 部分服务不提供 /models，回退一次最小对话
       if ([400, 403, 404, 405, 501].includes(e.status)) {
-        if (!p.model) { showError('接口未提供 /models，请先填默认模型再测试'); return; }
+        if (!p.model) {
+          setStatus('✗ 接口未提供 /models，请先填默认模型再测试', 'error');
+          showError('接口未提供 /models，请先填默认模型再测试');
+          return;
+        }
+        setStatus('模型列表不可用，正在测试最小对话…');
         const t1 = Date.now();
-        await fetchJsonWithRetry(buildApiUrl(p, '/chat/completions'), {
+        await requestJson('/chat/completions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + p.key },
           body: JSON.stringify(ProviderAdapters.buildChatRequest(p, { stream: false, maxTokens: 1, messages: [{ role: 'user', content: 'ping' }] })),
-        }, opts);
-        flash(`连接正常 · ${Date.now() - t1}ms（该接口不提供 /models）`);
+        });
+        const message = `连接正常 · ${Date.now() - t1}ms（该接口不提供 /models）`;
+        setStatus('✓ ' + message, 'success');
+        flash(message);
         return;
       }
       throw e;
     }
   } catch (err) {
+    setStatus('✗ ' + (err.message || err), 'error');
     showError('连接失败：' + (err.message || err));
   } finally {
     btn.disabled = false; btn.textContent = label;
@@ -1293,6 +1326,14 @@ function parseSemver(version) {
   return m ? m.slice(1).map(Number) : null;
 }
 
+function renderAppVersion() {
+  const badge = document.getElementById('appVersionBadge');
+  if (!badge) return;
+  const version = String(APP_RELEASE_VERSION || '').trim().replace(/^v/i, '');
+  badge.hidden = !parseSemver(version);
+  badge.textContent = badge.hidden ? '' : `v${version}`;
+}
+
 function compareSemver(a, b) {
   const av = parseSemver(a);
   const bv = parseSemver(b);
@@ -1419,6 +1460,8 @@ if (canUseNativeUpdater()) {
   // 不阻塞主界面启动；网络失败也只记控制台，不打扰正常使用。
   setTimeout(() => checkForDesktopUpdate({ manual: false }), 1200);
 }
+
+renderAppVersion();
 
 // ===== 初始化 =====
 loadSettings();
